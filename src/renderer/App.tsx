@@ -41,6 +41,15 @@ export default function App() {
     return unsubscribe
   }, [])
 
+  // Browser-preview demo: let the control panel switch animation states. Harmless
+  // under Electron, where nothing dispatches this event.
+  useEffect(() => {
+    const handler = (e: Event) =>
+      setState((e as CustomEvent<AnimationState>).detail)
+    window.addEventListener('couple:set-state', handler)
+    return () => window.removeEventListener('couple:set-state', handler)
+  }, [])
+
   return (
     // Fill the window; pin the character to the bottom-right corner.
     <div className="flex h-full w-full items-end justify-end p-1">

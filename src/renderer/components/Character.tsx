@@ -5,18 +5,21 @@ import {
   useState,
   type MouseEvent,
 } from 'react'
+import { useRive } from '@rive-app/react-canvas'
 import type { AnimationState, ReactionKind } from '../../shared/types'
+// The cat's idle animation, authored in Rive. `?url` makes Vite emit it as an
+// asset and hand us back its (hashed, production-safe) URL.
+import catIdleUrl from '../../../assets/characters/cat-idle.riv?url'
 
-/** Per-state placeholder visuals. Swap these for real sprites later. */
-const STATE_VISUALS: Record<
-  AnimationState,
-  { emoji: string; ring: string; label: string }
-> = {
-  idle: { emoji: '🐱', ring: 'ring-pink-300/40', label: '' },
-  happy: { emoji: '😸', ring: 'ring-yellow-300/70', label: '♪' },
-  talking: { emoji: '🐱', ring: 'ring-sky-300/70', label: '💬' },
-  studying: { emoji: '🐱', ring: 'ring-indigo-300/70', label: '📚' },
-  away: { emoji: '🐱', ring: 'ring-slate-400/40', label: '💤' },
+/** Per-state decoration shown over the Rive sprite. Stage 1 only has the idle
+ *  loop, so the state mainly drives a small badge + an "away" dim. Later, these
+ *  states will map to Rive state-machine inputs. */
+const STATE_BADGE: Record<AnimationState, string> = {
+  idle: '',
+  happy: '♪',
+  talking: '💬',
+  studying: '📚',
+  away: '💤',
 }
 
 const REACTION_SYMBOL: Record<ReactionKind, string> = {
@@ -55,7 +58,11 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   const [transform, setTransform] = useState<Transform>('none')
   const clickTimer = useRef<number | null>(null)
 
-  const visuals = STATE_VISUALS[state]
+  // Load + autoplay the idle Rive animation. The canvas is transparent, so it
+  // composites cleanly onto the overlay window.
+  const { RiveComponent } = useRive({ src: catIdleUrl, autoplay: true })
+
+  const badge = STATE_BADGE[state]
   const isAway = state === 'away'
 
   function spawnFloat(kind: ReactionKind) {
@@ -132,21 +139,19 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
             key={transform} /* restart the animation each time it changes */
             onAnimationEnd={() => setTransform('none')}
             className={[
-              'flex h-[96px] w-[96px] items-center justify-center rounded-full',
-              'bg-white/10 backdrop-blur-[1px] ring-4 transition-transform duration-150',
+              'relative h-[120px] w-[120px] transition-transform duration-150',
               'group-hover:scale-110',
-              visuals.ring,
               isAway ? 'grayscale opacity-60' : '',
               transform === 'bounce' ? 'animate-bounce1' : '',
               transform === 'spin' ? 'animate-spin1' : '',
             ].join(' ')}
           >
-            <span className="text-5xl leading-none">{visuals.emoji}</span>
+            <RiveComponent className="h-full w-full" />
 
             {/* Small state badge (talking/studying/away/happy). */}
-            {visuals.label && (
-              <span className="absolute -right-1 -top-1 text-xl drop-shadow">
-                {visuals.label}
+            {badge && (
+              <span className="absolute right-1 top-1 text-xl drop-shadow">
+                {badge}
               </span>
             )}
           </div>

@@ -1,0 +1,166 @@
+import type {
+  AnimationState,
+  CharacterAction,
+  CoupleWidgetApi,
+} from '../../shared/types'
+
+// Browser-only demo shim. When the app runs in a plain browser (no Electron
+// preload), `window.couple` is undefined. This installs a mock implementation so
+// the React UI works without the main process, plus some demo chrome: a
+// desktop-like backdrop, an HTML right-click menu, and a state switcher panel.
+//
+// In Electron this file's install function returns immediately because the real
+// `window.couple` bridge already exists.
+export function installDemoMock(): void {
+  if (window.couple) return // running under Electron — nothing to do.
+
+  let actionHandler: ((action: CharacterAction) => void) | null = null
+  let lastPos = { x: window.innerWidth - 90, y: window.innerHeight - 150 }
+
+  // Remember where the last right-click happened so the menu opens there.
+  document.addEventListener(
+    'contextmenu',
+    (e) => {
+      lastPos = { x: e.clientX, y: e.clientY }
+    },
+    true,
+  )
+
+  const api: CoupleWidgetApi = {
+    setMouseThrough() {
+      /* no-op in the browser — there's no OS window to make click-through */
+    },
+    showContextMenu() {
+      openMenu(lastPos.x, lastPos.y)
+    },
+    onCharacterAction(handler) {
+      actionHandler = handler
+      return () => {
+        if (actionHandler === handler) actionHandler = null
+      }
+    },
+  }
+  window.couple = api
+
+  const fire = (action: CharacterAction) => actionHandler?.(action)
+  const setState = (s: AnimationState) =>
+    window.dispatchEvent(new CustomEvent('couple:set-state', { detail: s }))
+
+  // --- Desktop-like backdrop so the transparent overlay reads correctly -------
+  Object.assign(document.body.style, {
+    background:
+      'linear-gradient(135deg,#1e3a8a 0%,#6d28d9 50%,#be185d 100%)',
+  })
+
+  // --- HTML right-click menu --------------------------------------------------
+  function openMenu(x: number, y: number) {
+    document.getElementById('demo-menu')?.remove()
+    const menu = document.createElement('div')
+    menu.id = 'demo-menu'
+    Object.assign(menu.style, {
+      position: 'fixed',
+      left: `${Math.min(x, window.innerWidth - 140)}px`,
+      top: `${Math.min(y, window.innerHeight - 160)}px`,
+      minWidth: '120px',
+      background: 'rgba(30,30,40,0.97)',
+      color: '#fff',
+      borderRadius: '8px',
+      padding: '4px',
+      font: '13px system-ui, sans-serif',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+      zIndex: '9999',
+    })
+    const items: Array<[string, CharacterAction]> = [
+      ['Pet', 'pet'],
+      ['Poke', 'poke'],
+      ['Send Heart', 'send-heart'],
+      ['Settings', 'settings'],
+    ]
+    items.forEach(([label, action], i) => {
+      if (i === 3) {
+        const sep = document.createElement('div')
+        Object.assign(sep.style, {
+          height: '1px',
+          background: 'rgba(255,255,255,0.15)',
+          margin: '4px 0',
+        })
+        menu.appendChild(sep)
+      }
+      const item = document.createElement('div')
+      item.textContent = label
+      Object.assign(item.style, {
+        padding: '6px 12px',
+        borderRadius: '5px',
+        cursor: 'pointer',
+      })
+      item.onmouseenter = () => (item.style.background = 'rgba(255,255,255,0.12)')
+      item.onmouseleave = () => (item.style.background = 'transparent')
+      item.onclick = () => {
+        menu.remove()
+        fire(action)
+      }
+      menu.appendChild(item)
+    })
+    document.body.appendChild(menu)
+    const close = () => {
+      menu.remove()
+      document.removeEventListener('mousedown', close)
+    }
+    setTimeout(() => document.addEventListener('mousedown', close), 0)
+  }
+
+  // --- Demo control panel -----------------------------------------------------
+  const panel = document.createElement('div')
+  Object.assign(panel.style, {
+    position: 'fixed',
+    left: '16px',
+    top: '16px',
+    color: '#fff',
+    font: '13px system-ui, sans-serif',
+    background: 'rgba(0,0,0,0.45)',
+    padding: '14px 16px',
+    borderRadius: '12px',
+    maxWidth: '300px',
+    lineHeight: '1.5',
+    zIndex: '9998',
+  })
+  panel.innerHTML = `
+    <div style="font-weight:700;font-size:15px;margin-bottom:6px">CoupleWidget — browser preview</div>
+    <div style="opacity:.85;margin-bottom:10px">
+      The real app is a transparent, always-on-top desktop overlay (bottom-right).
+      Here it's shown on a faux desktop. The system tray isn't available in a browser.
+      <br><br>
+      Try: <b>hover</b>, <b>click</b> (♥), <b>double-click</b> (~), <b>right-click</b> the character.
+    </div>
+    <div style="font-weight:600;margin-bottom:4px">Animation states:</div>
+    <div id="demo-states" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <div style="font-weight:600;margin-bottom:4px">Menu actions:</div>
+    <div id="demo-actions" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+  `
+  document.body.appendChild(panel)
+
+  const mkBtn = (label: string, onClick: () => void) => {
+    const b = document.createElement('button')
+    b.textContent = label
+    Object.assign(b.style, {
+      padding: '4px 10px',
+      borderRadius: '999px',
+      border: '1px solid rgba(255,255,255,0.25)',
+      background: 'rgba(255,255,255,0.08)',
+      color: '#fff',
+      cursor: 'pointer',
+      font: '12px system-ui, sans-serif',
+    })
+    b.onclick = onClick
+    return b
+  }
+
+  const states: AnimationState[] = ['idle', 'happy', 'talking', 'studying', 'away']
+  const statesEl = panel.querySelector('#demo-states')!
+  states.forEach((s) => statesEl.appendChild(mkBtn(s, () => setState(s))))
+
+  const actionsEl = panel.querySelector('#demo-actions')!
+  ;(['pet', 'poke', 'send-heart'] as CharacterAction[]).forEach((a) =>
+    actionsEl.appendChild(mkBtn(a, () => fire(a))),
+  )
+}
