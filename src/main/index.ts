@@ -11,8 +11,8 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox')
 }
 
-const WIDGET_WIDTH = 200
-const WIDGET_HEIGHT = 200
+const WIDGET_WIDTH = 260
+const WIDGET_HEIGHT = 300
 
 // A tiny pink-heart icon generated at build-time, embedded so we don't depend on
 // an external file path that may not be packaged. Used for the system tray.

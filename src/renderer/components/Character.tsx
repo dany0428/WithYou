@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -7,9 +8,15 @@ import {
 } from 'react'
 import { useRive } from '@rive-app/react-canvas'
 import type { AnimationState, ReactionKind } from '../../shared/types'
-// The cat's idle animation, authored in Rive. `?url` makes Vite emit it as an
-// asset and hand us back its (hashed, production-safe) URL.
+// The cat animation, authored in Rive. `?url` makes Vite emit it as an asset and
+// hand us back its (hashed, production-safe) URL.
 import catIdleUrl from '../../../assets/characters/cat-idle.riv?url'
+
+// The look-at-cursor head rig is driven by a pointer Listener inside the file's
+// state machine — Rive only sees the cursor while it's over the canvas, so we
+// forward the global mouse position into the canvas to make it track everywhere.
+// We don't hardcode the state-machine name: it's auto-detected on load, so any
+// dropped-in .riv works without code changes.
 
 /** Per-state decoration shown over the Rive sprite. Stage 1 only has the idle
  *  loop, so the state mainly drives a small badge + an "away" dim. Later, these
@@ -46,7 +53,7 @@ interface FloatingText {
   symbol: string
 }
 
-type Transform = 'none' | 'bounce' | 'spin'
+type Reaction = 'none' | 'bounce' | 'spin'
 
 let floatId = 0
 
@@ -55,15 +62,55 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   ref,
 ) {
   const [floats, setFloats] = useState<FloatingText[]>([])
-  const [transform, setTransform] = useState<Transform>('none')
+  const [reaction, setReaction] = useState<Reaction>('none')
   const clickTimer = useRef<number | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // Load + autoplay the idle Rive animation. The canvas is transparent, so it
-  // composites cleanly onto the overlay window.
-  const { RiveComponent } = useRive({ src: catIdleUrl, autoplay: true })
+  // Load the file; we start playback ourselves below once we know whether it has
+  // a state machine. The canvas is transparent, so it composites cleanly.
+  const { rive, RiveComponent } = useRive({
+    src: catIdleUrl,
+    autoplay: false,
+    autoBind: true,
+  })
 
   const badge = STATE_BADGE[state]
   const isAway = state === 'away'
+
+  // Auto-detect and play the file's state machine (so its pointer/look logic
+  // runs). Fall back to the default timeline if the file has no state machine.
+  useEffect(() => {
+    if (!rive) return
+    try {
+      const names = (rive as unknown as { stateMachineNames?: string[] })
+        .stateMachineNames
+      if (names && names.length > 0) rive.play(names[0])
+      else rive.play()
+    } catch {
+      /* ignore — nothing to play */
+    }
+  }, [rive])
+
+  // --- Look-at-cursor: forward the global mouse position onto the Rive canvas
+  // as synthetic `mousemove` events, so the state machine's pointer listener
+  // tracks the cursor even when it's outside the (small) canvas. ---
+  useEffect(() => {
+    if (!rive) return
+    const canvas = containerRef.current?.querySelector('canvas')
+    if (!canvas) return
+    const onMove = (e: globalThis.MouseEvent) => {
+      // bubbles:false so this synthetic event doesn't loop back to window.
+      canvas.dispatchEvent(
+        new MouseEvent('mousemove', {
+          clientX: e.clientX,
+          clientY: e.clientY,
+          bubbles: false,
+        }),
+      )
+    }
+    window.addEventListener('mousemove', onMove)
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [rive])
 
   function spawnFloat(kind: ReactionKind) {
     const id = floatId++
@@ -74,8 +121,16 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
     }, 1200)
   }
 
+  // Restart a one-shot reaction animation WITHOUT remounting the Rive canvas:
+  // briefly clear the class, then re-apply on the next frame so the CSS
+  // animation replays. (Remounting via `key` was destroying the canvas.)
+  function playReaction(next: Exclude<Reaction, 'none'>) {
+    setReaction('none')
+    requestAnimationFrame(() => setReaction(next))
+  }
+
   function react(kind: ReactionKind) {
-    setTransform(kind === 'spin' || kind === 'tilde' ? 'spin' : 'bounce')
+    playReaction(kind === 'spin' || kind === 'tilde' ? 'spin' : 'bounce')
     spawnFloat(kind)
   }
 
@@ -92,7 +147,7 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
     if (clickTimer.current !== null) return
     clickTimer.current = window.setTimeout(() => {
       clickTimer.current = null
-      setTransform('bounce')
+      playReaction('bounce')
       spawnFloat('heart')
     }, 220)
   }
@@ -102,7 +157,7 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
       window.clearTimeout(clickTimer.current)
       clickTimer.current = null
     }
-    setTransform('spin')
+    playReaction('spin')
     spawnFloat('tilde')
   }
 
@@ -113,9 +168,11 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
 
   return (
     <div className="flex flex-col items-center justify-end gap-1 select-none">
+
       {/* Character + floating reactions */}
       <div
-        className="group relative h-[120px] w-[120px] cursor-pointer"
+        ref={containerRef}
+        className="group relative h-[220px] w-[220px] cursor-pointer"
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
@@ -125,32 +182,31 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
           {floats.map((f) => (
             <span
               key={f.id}
-              className="absolute text-2xl font-bold text-pink-500 drop-shadow animate-floatText"
+              className="absolute text-3xl font-bold text-pink-500 drop-shadow animate-floatText"
             >
               {f.symbol}
             </span>
           ))}
         </div>
 
-        {/* Sprite. The idle float runs on a wrapper; one-shot reactions run on the
-            inner element so they compose cleanly. */}
+        {/* Idle bob runs on this wrapper; one-shot reactions run on the inner
+            element so they compose. The Rive canvas stays mounted throughout. */}
         <div className="flex h-full w-full items-center justify-center animate-float">
           <div
-            key={transform} /* restart the animation each time it changes */
-            onAnimationEnd={() => setTransform('none')}
+            onAnimationEnd={() => setReaction('none')}
             className={[
-              'relative h-[120px] w-[120px] transition-transform duration-150',
-              'group-hover:scale-110',
+              'relative h-[220px] w-[220px] transition-transform duration-150',
+              'group-hover:scale-105',
               isAway ? 'grayscale opacity-60' : '',
-              transform === 'bounce' ? 'animate-bounce1' : '',
-              transform === 'spin' ? 'animate-spin1' : '',
+              reaction === 'bounce' ? 'animate-bounce1' : '',
+              reaction === 'spin' ? 'animate-spin1' : '',
             ].join(' ')}
           >
             <RiveComponent className="h-full w-full" />
 
             {/* Small state badge (talking/studying/away/happy). */}
             {badge && (
-              <span className="absolute right-1 top-1 text-xl drop-shadow">
+              <span className="absolute right-2 top-2 text-2xl drop-shadow">
                 {badge}
               </span>
             )}
@@ -159,7 +215,7 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
       </div>
 
       {/* Name tag */}
-      <div className="rounded-full bg-black/55 px-3 py-0.5 text-xs font-semibold text-white shadow">
+      <div className="-mt-2 rounded-full bg-black/55 px-3 py-0.5 text-xs font-semibold text-white shadow">
         {name}
       </div>
     </div>
