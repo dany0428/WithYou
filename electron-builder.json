@@ -1,0 +1,22 @@
+{
+  "appId": "com.couplewidget.app",
+  "productName": "CoupleWidget",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*"
+  ],
+  "win": {
+    "target": ["nsis"]
+  },
+  "mac": {
+    "target": ["dmg"],
+    "category": "public.app-category.social-networking"
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "category": "Utility"
+  }
+}

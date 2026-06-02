@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* The overlay must be fully transparent — never paint a background on the page
+   body, otherwise the "transparent window" shows an opaque rectangle. */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+  overflow: hidden;
+  /* Disable text selection / native callout — this is a widget, not a document. */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
