@@ -2,6 +2,8 @@ import { app, BrowserWindow, Menu, Tray, screen, nativeImage } from 'electron'
 import path from 'node:path'
 import { registerIpc } from './ipc'
 import { startActivityMonitor, type ActivityMonitor } from './activity'
+import { createConnection, type Connection } from './net/connection'
+import { createLoopbackTransport } from './net/loopbackTransport'
 
 // ---------------------------------------------------------------------------
 // Container/headless support (e.g. running inside GitHub Codespaces).
@@ -23,6 +25,7 @@ const TRAY_ICON_DATA_URL =
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let activityMonitor: ActivityMonitor | null = null
+let connection: Connection | null = null
 
 /** Anchor the widget to the bottom-right of the *primary* display's work area. */
 function positionWindow(win: BrowserWindow): void {
@@ -79,9 +82,13 @@ function createWindow(): void {
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
 
-  // The presence monitor may have settled on a status before the renderer was
-  // listening; replay it whenever the page (re)loads so the label is correct.
-  mainWindow.webContents.on('did-finish-load', () => activityMonitor?.resend())
+  // The connection may have settled before the renderer was listening; replay
+  // the partner presence + connection state whenever the page (re)loads, and
+  // re-emit our local status so the loopback partner repopulates.
+  mainWindow.webContents.on('did-finish-load', () => {
+    connection?.resend()
+    activityMonitor?.resend()
+  })
 }
 
 function createTray(): void {
@@ -127,7 +134,13 @@ if (process.platform === 'darwin') {
 app.whenReady().then(() => {
   createWindow()
   createTray()
-  activityMonitor = startActivityMonitor(() => mainWindow)
+  // Detection feeds the connection (outbound); the connection feeds the
+  // renderer (inbound partner presence). Loopback transport for now.
+  connection = createConnection(() => mainWindow, createLoopbackTransport())
+  activityMonitor = startActivityMonitor((status) =>
+    connection?.setLocalStatus(status),
+  )
+  connection.start()
   registerIpc(() => mainWindow, () => activityMonitor)
 
   app.on('activate', () => {

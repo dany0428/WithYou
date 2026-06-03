@@ -1,18 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import Character, { type CharacterHandle } from './components/Character'
-import type { ActivityStatus, AnimationState, CharacterAction } from '../shared/types'
-
-// Stage 1: the displayed character is a local placeholder. In later stages this
-// name + state will be driven by the *partner's* real-time activity.
-const PARTNER_NAME = 'Partner'
+import type {
+  AnimationState,
+  CharacterAction,
+  ConnectionState,
+  PartnerPresence,
+} from '../shared/types'
 
 export default function App() {
   const characterRef = useRef<CharacterHandle>(null)
   const [state, setState] = useState<AnimationState>('idle')
-  // Local activity status detected by the main process (Stage 2). Drives the
-  // floating status label above the character. Later this will be the
-  // *partner's* status, arriving over the network.
-  const [activity, setActivity] = useState<ActivityStatus>('idle')
+  // The displayed character represents the PARTNER (Stage 3). Their presence and
+  // the link state arrive from the main process over the connection.
+  const [partner, setPartner] = useState<PartnerPresence>({
+    name: 'Partner',
+    status: 'idle',
+  })
+  const [connection, setConnection] = useState<ConnectionState>('connecting')
 
   // The widget window is click-through by default; we only become interactive
   // while the cursor is actually over the character. This keeps the rest of the
@@ -45,10 +49,9 @@ export default function App() {
     return unsubscribe
   }, [])
 
-  // Activity status pushed from the main process.
-  useEffect(() => {
-    return window.couple.onActivityUpdate(setActivity)
-  }, [])
+  // Partner presence + connection state pushed from the main process.
+  useEffect(() => window.couple.onPartnerUpdate(setPartner), [])
+  useEffect(() => window.couple.onConnectionState(setConnection), [])
 
   // Browser-preview demo: let the control panel switch animation states. Harmless
   // under Electron, where nothing dispatches this event.
@@ -70,9 +73,10 @@ export default function App() {
       >
         <Character
           ref={characterRef}
-          name={PARTNER_NAME}
+          name={partner.name}
           state={state}
-          activity={activity}
+          activity={partner.status}
+          connection={connection}
         />
       </div>
     </div>

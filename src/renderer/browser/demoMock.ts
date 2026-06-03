@@ -2,6 +2,7 @@ import type {
   ActivityStatus,
   AnimationState,
   CharacterAction,
+  ConnectionState,
   CoupleWidgetApi,
 } from '../../shared/types'
 
@@ -16,7 +17,8 @@ export function installDemoMock(): void {
   if (window.couple) return // running under Electron — nothing to do.
 
   let actionHandler: ((action: CharacterAction) => void) | null = null
-  let activityHandler: ((status: ActivityStatus) => void) | null = null
+  let partnerHandler: ((p: { name: string; status: ActivityStatus }) => void) | null = null
+  let connectionHandler: ((s: ConnectionState) => void) | null = null
   let lastPos = { x: window.innerWidth - 90, y: window.innerHeight - 150 }
 
   // Remember where the last right-click happened so the menu opens there.
@@ -41,17 +43,28 @@ export function installDemoMock(): void {
         if (actionHandler === handler) actionHandler = null
       }
     },
-    onActivityUpdate(handler) {
-      activityHandler = handler
+    onPartnerUpdate(handler) {
+      partnerHandler = handler
       return () => {
-        if (activityHandler === handler) activityHandler = null
+        if (partnerHandler === handler) partnerHandler = null
+      }
+    },
+    onConnectionState(handler) {
+      connectionHandler = handler
+      return () => {
+        if (connectionHandler === handler) connectionHandler = null
       }
     },
   }
   window.couple = api
 
   const fire = (action: CharacterAction) => actionHandler?.(action)
-  const fireActivity = (status: ActivityStatus) => activityHandler?.(status)
+  const firePartner = (status: ActivityStatus) =>
+    partnerHandler?.({ name: 'Partner', status })
+  const fireConnection = (state: ConnectionState) => connectionHandler?.(state)
+
+  // Simulate the loopback transport connecting shortly after load.
+  setTimeout(() => fireConnection('connected'), 400)
   const setState = (s: AnimationState) =>
     window.dispatchEvent(new CustomEvent('couple:set-state', { detail: s }))
 
@@ -141,7 +154,9 @@ export function installDemoMock(): void {
       <br><br>
       Try: <b>hover</b>, <b>click</b> (♥), <b>double-click</b> (~), <b>right-click</b> the character.
     </div>
-    <div style="font-weight:600;margin-bottom:4px">Activity status:</div>
+    <div style="font-weight:600;margin-bottom:4px">Connection:</div>
+    <div id="demo-connection" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <div style="font-weight:600;margin-bottom:4px">Partner status (simulated):</div>
     <div id="demo-activity" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
     <div style="font-weight:600;margin-bottom:4px">Animation states:</div>
     <div id="demo-states" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
@@ -166,9 +181,14 @@ export function installDemoMock(): void {
     return b
   }
 
+  const connectionEl = panel.querySelector('#demo-connection')!
+  ;(['connecting', 'connected', 'disconnected'] as ConnectionState[]).forEach((s) =>
+    connectionEl.appendChild(mkBtn(s, () => fireConnection(s))),
+  )
+
   const activityEl = panel.querySelector('#demo-activity')!
   ;(['idle', 'gaming', 'working', 'music', 'video', 'afk'] as ActivityStatus[]).forEach(
-    (a) => activityEl.appendChild(mkBtn(a, () => fireActivity(a))),
+    (a) => activityEl.appendChild(mkBtn(a, () => firePartner(a))),
   )
 
   const states: AnimationState[] = ['idle', 'happy', 'talking', 'studying', 'away']

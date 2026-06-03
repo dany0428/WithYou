@@ -20,6 +20,30 @@ export type ActivityStatus =
   | 'video'
   | 'afk'
 
+/** State of the link to the partner's app. */
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
+
+/**
+ * The partner's presence, as shown on *this* screen. Arrives over the network
+ * (Stage 3); the displayed character represents the partner, not the local user.
+ */
+export interface PartnerPresence {
+  /** Display name to show on the partner's character. */
+  name: string
+  /** The partner's current activity status. */
+  status: ActivityStatus
+}
+
+/**
+ * Wire message exchanged between the two apps. Intentionally tiny and
+ * transport-agnostic so any transport (loopback now; a relay/P2P later) can
+ * carry it. Lives in shared so both sides agree on the shape.
+ */
+export interface PresenceMessage {
+  name: string
+  status: ActivityStatus
+}
+
 /** Discrete reactions triggered by user interaction (one-shot animations). */
 export type ReactionKind = 'heart' | 'tilde' | 'bounce' | 'spin'
 
@@ -34,8 +58,10 @@ export const IPC = {
   ShowContextMenu: 'window:show-context-menu',
   /** Main -> renderer: a context-menu / tray action was chosen. */
   CharacterAction: 'character:action',
-  /** Main -> renderer: the local user's detected activity status changed. */
-  ActivityUpdate: 'activity:update',
+  /** Main -> renderer: the partner's presence (name + status) changed. */
+  PartnerUpdate: 'partner:update',
+  /** Main -> renderer: the connection to the partner changed state. */
+  ConnectionState: 'connection:state',
 } as const
 
 /**
@@ -50,6 +76,8 @@ export interface CoupleWidgetApi {
   showContextMenu(): void
   /** Subscribe to actions coming from the context menu / tray. Returns an unsubscribe fn. */
   onCharacterAction(handler: (action: CharacterAction) => void): () => void
-  /** Subscribe to local activity-status changes. Returns an unsubscribe fn. */
-  onActivityUpdate(handler: (status: ActivityStatus) => void): () => void
+  /** Subscribe to partner presence updates. Returns an unsubscribe fn. */
+  onPartnerUpdate(handler: (partner: PartnerPresence) => void): () => void
+  /** Subscribe to connection-state changes. Returns an unsubscribe fn. */
+  onConnectionState(handler: (state: ConnectionState) => void): () => void
 }

@@ -10,6 +10,7 @@ import { useRive } from '@rive-app/react-canvas'
 import type {
   ActivityStatus,
   AnimationState,
+  ConnectionState,
   ReactionKind,
 } from '../../shared/types'
 // The cat animation, authored in Rive. `?url` makes Vite emit it as an asset and
@@ -63,7 +64,10 @@ export interface CharacterHandle {
 interface CharacterProps {
   name: string
   state: AnimationState
+  /** The partner's detected activity status. */
   activity: ActivityStatus
+  /** Link state to the partner; gates whether the activity is meaningful. */
+  connection: ConnectionState
 }
 
 interface FloatingText {
@@ -76,7 +80,7 @@ type Reaction = 'none' | 'bounce' | 'spin'
 let floatId = 0
 
 const Character = forwardRef<CharacterHandle, CharacterProps>(function Character(
-  { name, state, activity },
+  { name, state, activity, connection },
   ref,
 ) {
   const [floats, setFloats] = useState<FloatingText[]>([])
@@ -93,9 +97,16 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   })
 
   const badge = STATE_BADGE[state]
-  const activityLabel = ACTIVITY_LABEL[activity]
-  // Dim the sprite when away (idle-detected AFK or the explicit 'away' state).
-  const isAway = state === 'away' || activity === 'afk'
+  const connected = connection === 'connected'
+  // While not connected, the partner's activity is unknown — show the link state
+  // instead. Connected + idle shows no label (the calm default).
+  const statusLabel = connected
+    ? ACTIVITY_LABEL[activity]
+    : connection === 'connecting'
+      ? '… Connecting'
+      : '⚪ Offline'
+  // Dim the sprite when away, the explicit 'away' state, or while disconnected.
+  const isAway = !connected || state === 'away' || activity === 'afk'
 
   // Auto-detect and play the file's state machine (so its pointer/look logic
   // runs). Fall back to the default timeline if the file has no state machine.
@@ -189,11 +200,12 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   return (
     <div className="flex flex-col items-center justify-end gap-1 select-none">
 
-      {/* Floating activity-status label, hovering above the character. Hidden
-          when idle; reserves no space so the character stays anchored. */}
-      {activityLabel && (
+      {/* Floating status label, hovering above the character: the partner's
+          activity when connected, otherwise the link state. Hidden when
+          connected + idle; reserves no space so the character stays anchored. */}
+      {statusLabel && (
         <div className="pointer-events-none animate-float rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white shadow backdrop-blur-sm">
-          {activityLabel}
+          {statusLabel}
         </div>
       )}
 

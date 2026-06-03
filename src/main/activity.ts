@@ -1,5 +1,5 @@
-import { powerMonitor, type BrowserWindow } from 'electron'
-import { IPC, type ActivityStatus } from '../shared/types'
+import { powerMonitor } from 'electron'
+import type { ActivityStatus } from '../shared/types'
 import { getForegroundWindow } from './foregroundWindow'
 import { classifyForeground } from './activityRules'
 
@@ -27,7 +27,7 @@ const FOREGROUND_POLL_MS = 10_000
 export interface ActivityMonitor {
   /** Stop polling and detach OS listeners. */
   stop(): void
-  /** Re-send the current status (e.g. after the renderer (re)loads). */
+  /** Re-emit the current status (e.g. after the renderer (re)loads). */
   resend(): void
   /**
    * Force a status, overriding auto-detection, or pass `null` to return to
@@ -40,13 +40,14 @@ export interface ActivityMonitor {
 }
 
 /**
- * Begin detecting local activity and emit `ActivityUpdate` to the renderer
- * whenever the merged status changes.
+ * Begin detecting local activity and invoke `onStatus` whenever the merged
+ * status changes. The caller decides what to do with it (Stage 3: forward it to
+ * the partner over the connection).
  *
- * @param getWindow Accessor for the live widget window (may be null if hidden).
+ * @param onStatus Called with the new status on every change.
  */
 export function startActivityMonitor(
-  getWindow: () => BrowserWindow | null,
+  onStatus: (status: ActivityStatus) => void,
 ): ActivityMonitor {
   let emitted: ActivityStatus | null = null
   let afk = false
@@ -56,17 +57,13 @@ export function startActivityMonitor(
   // A user-forced status; when set it wins over auto-detection entirely.
   let override: ActivityStatus | null = null
 
-  const send = (status: ActivityStatus) => {
-    getWindow()?.webContents.send(IPC.ActivityUpdate, status)
-  }
-
   // Merge the signals and emit only on change. A manual override wins over
   // everything; otherwise AFK beats the foreground-derived status.
   const recompute = () => {
     const next: ActivityStatus = override ?? (afk ? 'afk' : foreground)
     if (next === emitted) return
     emitted = next
-    send(next)
+    onStatus(next)
   }
 
   const sampleIdle = () => {
@@ -97,7 +94,7 @@ export function startActivityMonitor(
       powerMonitor.removeListener('unlock-screen', sampleIdle)
     },
     resend() {
-      if (emitted !== null) send(emitted)
+      if (emitted !== null) onStatus(emitted)
     },
     setOverride(status) {
       override = status
