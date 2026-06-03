@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC,
+  type ActivityStatus,
   type CharacterAction,
   type CoupleWidgetApi,
-  type PresenceStatus,
 } from '../shared/types'
 
 // The preload runs in an isolated context with access to a limited set of Node
@@ -22,11 +22,11 @@ const api: CoupleWidgetApi = {
     ipcRenderer.on(IPC.CharacterAction, listener)
     return () => ipcRenderer.removeListener(IPC.CharacterAction, listener)
   },
-  onPresenceUpdate(handler) {
-    const listener = (_event: Electron.IpcRendererEvent, status: PresenceStatus) =>
+  onActivityUpdate(handler) {
+    const listener = (_event: Electron.IpcRendererEvent, status: ActivityStatus) =>
       handler(status)
-    ipcRenderer.on(IPC.PresenceUpdate, listener)
-    return () => ipcRenderer.removeListener(IPC.PresenceUpdate, listener)
+    ipcRenderer.on(IPC.ActivityUpdate, listener)
+    return () => ipcRenderer.removeListener(IPC.ActivityUpdate, listener)
   },
 }
 

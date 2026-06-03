@@ -1,22 +1,28 @@
 import { powerMonitor, type BrowserWindow } from 'electron'
-import { IPC, type PresenceStatus } from '../shared/types'
+import { IPC, type ActivityStatus } from '../shared/types'
+import { getForegroundWindow } from './foregroundWindow'
+import { classifyForeground } from './activityRules'
 
 // ---------------------------------------------------------------------------
-// Stage 2a — local presence detection (idle / AFK).
+// Stage 2 — local activity detection.
 //
-// Electron's `powerMonitor.getSystemIdleTime()` reports seconds since the last
-// keyboard/mouse input, cross-platform and with no extra dependencies. We poll
-// it and flip the user between `active` and `afk` around a threshold, pushing a
-// status to the renderer only when it actually changes.
+// Two signals feed one emitted status:
+//   - OS input-idle time (powerMonitor) → `afk` once the user stops touching the
+//     machine. This takes precedence over everything else.
+//   - The foreground window, classified into gaming / working / music / video /
+//     idle (see activityRules + foregroundWindow).
 //
-// Later slices will layer foreground-app detection on top to produce the richer
-// gaming / working / music / video statuses; this module owns the same pipe.
+// Idle is cheap so we sample it often; querying the foreground window shells out
+// to a native tool, so we sample it less frequently. Either sample recomputes
+// the merged status and we push to the renderer only when it actually changes.
 // ---------------------------------------------------------------------------
 
 /** Idle seconds after which the local user is considered away from keyboard. */
 const AFK_THRESHOLD_SECONDS = 60
-/** How often to sample the system idle time. */
-const POLL_INTERVAL_MS = 5_000
+/** How often to sample the (cheap) system idle time. */
+const IDLE_POLL_MS = 5_000
+/** How often to query the (more expensive) foreground window. */
+const FOREGROUND_POLL_MS = 10_000
 
 export interface ActivityMonitor {
   /** Stop polling and detach OS listeners. */
@@ -26,45 +32,61 @@ export interface ActivityMonitor {
 }
 
 /**
- * Begin polling OS idle time and emit `PresenceUpdate` to the renderer whenever
- * the active/afk status changes.
+ * Begin detecting local activity and emit `ActivityUpdate` to the renderer
+ * whenever the merged status changes.
  *
  * @param getWindow Accessor for the live widget window (may be null if hidden).
  */
 export function startActivityMonitor(
   getWindow: () => BrowserWindow | null,
 ): ActivityMonitor {
-  let current: PresenceStatus | null = null
+  let emitted: ActivityStatus | null = null
+  let afk = false
+  // Status derived from the foreground window when not AFK; `idle` until the
+  // first successful query (and on any platform where it can't be determined).
+  let foreground: ActivityStatus = 'idle'
 
-  const send = (status: PresenceStatus) => {
-    const win = getWindow()
-    win?.webContents.send(IPC.PresenceUpdate, status)
+  const send = (status: ActivityStatus) => {
+    getWindow()?.webContents.send(IPC.ActivityUpdate, status)
   }
 
-  const sample = () => {
-    const idle = powerMonitor.getSystemIdleTime()
-    const next: PresenceStatus = idle >= AFK_THRESHOLD_SECONDS ? 'afk' : 'active'
-    if (next === current) return
-    current = next
+  // Merge the two signals (AFK wins) and emit only on change.
+  const recompute = () => {
+    const next: ActivityStatus = afk ? 'afk' : foreground
+    if (next === emitted) return
+    emitted = next
     send(next)
   }
 
-  // Lock/unlock are immediate, reliable AFK signals on platforms that emit them;
-  // fold them into the same poll so they take effect without waiting a tick.
-  powerMonitor.on('lock-screen', sample)
-  powerMonitor.on('unlock-screen', sample)
+  const sampleIdle = () => {
+    afk = powerMonitor.getSystemIdleTime() >= AFK_THRESHOLD_SECONDS
+    recompute()
+  }
 
-  sample() // establish the initial status right away
-  const timer = setInterval(sample, POLL_INTERVAL_MS)
+  const sampleForeground = async () => {
+    const win = await getForegroundWindow()
+    foreground = win ? classifyForeground(win) : 'idle'
+    recompute()
+  }
+
+  // Lock/unlock are immediate, reliable AFK signals where the OS emits them.
+  powerMonitor.on('lock-screen', sampleIdle)
+  powerMonitor.on('unlock-screen', sampleIdle)
+
+  sampleIdle() // establish an initial status right away
+  void sampleForeground()
+  const idleTimer = setInterval(sampleIdle, IDLE_POLL_MS)
+  const fgTimer = setInterval(() => void sampleForeground(), FOREGROUND_POLL_MS)
 
   return {
     stop() {
-      clearInterval(timer)
-      powerMonitor.removeListener('lock-screen', sample)
-      powerMonitor.removeListener('unlock-screen', sample)
+      clearInterval(idleTimer)
+      clearInterval(fgTimer)
+      powerMonitor.removeListener('lock-screen', sampleIdle)
+      powerMonitor.removeListener('unlock-screen', sampleIdle)
     },
     resend() {
-      if (current !== null) send(current)
+      if (emitted !== null) send(emitted)
     },
   }
 }
