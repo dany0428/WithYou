@@ -127,8 +127,8 @@ if (process.platform === 'darwin') {
 app.whenReady().then(() => {
   createWindow()
   createTray()
-  registerIpc(() => mainWindow)
   activityMonitor = startActivityMonitor(() => mainWindow)
+  registerIpc(() => mainWindow, () => activityMonitor)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

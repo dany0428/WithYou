@@ -29,6 +29,14 @@ export interface ActivityMonitor {
   stop(): void
   /** Re-send the current status (e.g. after the renderer (re)loads). */
   resend(): void
+  /**
+   * Force a status, overriding auto-detection, or pass `null` to return to
+   * automatic detection. A manual override wins over both AFK and the
+   * foreground signal until cleared.
+   */
+  setOverride(status: ActivityStatus | null): void
+  /** The current manual override, or `null` when auto-detecting. */
+  getOverride(): ActivityStatus | null
 }
 
 /**
@@ -45,14 +53,17 @@ export function startActivityMonitor(
   // Status derived from the foreground window when not AFK; `idle` until the
   // first successful query (and on any platform where it can't be determined).
   let foreground: ActivityStatus = 'idle'
+  // A user-forced status; when set it wins over auto-detection entirely.
+  let override: ActivityStatus | null = null
 
   const send = (status: ActivityStatus) => {
     getWindow()?.webContents.send(IPC.ActivityUpdate, status)
   }
 
-  // Merge the two signals (AFK wins) and emit only on change.
+  // Merge the signals and emit only on change. A manual override wins over
+  // everything; otherwise AFK beats the foreground-derived status.
   const recompute = () => {
-    const next: ActivityStatus = afk ? 'afk' : foreground
+    const next: ActivityStatus = override ?? (afk ? 'afk' : foreground)
     if (next === emitted) return
     emitted = next
     send(next)
@@ -87,6 +98,13 @@ export function startActivityMonitor(
     },
     resend() {
       if (emitted !== null) send(emitted)
+    },
+    setOverride(status) {
+      override = status
+      recompute()
+    },
+    getOverride() {
+      return override
     },
   }
 }
