@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Character, { type CharacterHandle } from './components/Character'
-import type { AnimationState, CharacterAction } from '../shared/types'
+import type { AnimationState, CharacterAction, PresenceStatus } from '../shared/types'
 
 // Stage 1: the displayed character is a local placeholder. In later stages this
 // name + state will be driven by the *partner's* real-time activity.
@@ -9,6 +9,9 @@ const PARTNER_NAME = 'Partner'
 export default function App() {
   const characterRef = useRef<CharacterHandle>(null)
   const [state, setState] = useState<AnimationState>('idle')
+  // Local presence detected by the main process (Stage 2a). Drives the floating
+  // status label above the character. Later this will be the *partner's* status.
+  const [presence, setPresence] = useState<PresenceStatus>('active')
 
   // The widget window is click-through by default; we only become interactive
   // while the cursor is actually over the character. This keeps the rest of the
@@ -41,6 +44,11 @@ export default function App() {
     return unsubscribe
   }, [])
 
+  // Presence (active/afk) pushed from the main process.
+  useEffect(() => {
+    return window.couple.onPresenceUpdate(setPresence)
+  }, [])
+
   // Browser-preview demo: let the control panel switch animation states. Harmless
   // under Electron, where nothing dispatches this event.
   useEffect(() => {
@@ -59,7 +67,12 @@ export default function App() {
         onMouseEnter={() => setInteractive(true)}
         onMouseLeave={() => setInteractive(false)}
       >
-        <Character ref={characterRef} name={PARTNER_NAME} state={state} />
+        <Character
+          ref={characterRef}
+          name={PARTNER_NAME}
+          state={state}
+          presence={presence}
+        />
       </div>
     </div>
   )

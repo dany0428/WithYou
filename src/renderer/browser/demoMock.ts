@@ -2,6 +2,7 @@ import type {
   AnimationState,
   CharacterAction,
   CoupleWidgetApi,
+  PresenceStatus,
 } from '../../shared/types'
 
 // Browser-only demo shim. When the app runs in a plain browser (no Electron
@@ -15,6 +16,7 @@ export function installDemoMock(): void {
   if (window.couple) return // running under Electron — nothing to do.
 
   let actionHandler: ((action: CharacterAction) => void) | null = null
+  let presenceHandler: ((status: PresenceStatus) => void) | null = null
   let lastPos = { x: window.innerWidth - 90, y: window.innerHeight - 150 }
 
   // Remember where the last right-click happened so the menu opens there.
@@ -39,10 +41,17 @@ export function installDemoMock(): void {
         if (actionHandler === handler) actionHandler = null
       }
     },
+    onPresenceUpdate(handler) {
+      presenceHandler = handler
+      return () => {
+        if (presenceHandler === handler) presenceHandler = null
+      }
+    },
   }
   window.couple = api
 
   const fire = (action: CharacterAction) => actionHandler?.(action)
+  const firePresence = (status: PresenceStatus) => presenceHandler?.(status)
   const setState = (s: AnimationState) =>
     window.dispatchEvent(new CustomEvent('couple:set-state', { detail: s }))
 
@@ -132,6 +141,8 @@ export function installDemoMock(): void {
       <br><br>
       Try: <b>hover</b>, <b>click</b> (♥), <b>double-click</b> (~), <b>right-click</b> the character.
     </div>
+    <div style="font-weight:600;margin-bottom:4px">Presence (idle/AFK):</div>
+    <div id="demo-presence" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
     <div style="font-weight:600;margin-bottom:4px">Animation states:</div>
     <div id="demo-states" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
     <div style="font-weight:600;margin-bottom:4px">Menu actions:</div>
@@ -154,6 +165,11 @@ export function installDemoMock(): void {
     b.onclick = onClick
     return b
   }
+
+  const presenceEl = panel.querySelector('#demo-presence')!
+  ;(['active', 'afk'] as PresenceStatus[]).forEach((p) =>
+    presenceEl.appendChild(mkBtn(p, () => firePresence(p))),
+  )
 
   const states: AnimationState[] = ['idle', 'happy', 'talking', 'studying', 'away']
   const statesEl = panel.querySelector('#demo-states')!

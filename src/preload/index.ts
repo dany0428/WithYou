@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC, type CharacterAction, type CoupleWidgetApi } from '../shared/types'
+import {
+  IPC,
+  type CharacterAction,
+  type CoupleWidgetApi,
+  type PresenceStatus,
+} from '../shared/types'
 
 // The preload runs in an isolated context with access to a limited set of Node
 // APIs. We expose only a tiny, explicit surface to the renderer via
@@ -16,6 +21,12 @@ const api: CoupleWidgetApi = {
       handler(action)
     ipcRenderer.on(IPC.CharacterAction, listener)
     return () => ipcRenderer.removeListener(IPC.CharacterAction, listener)
+  },
+  onPresenceUpdate(handler) {
+    const listener = (_event: Electron.IpcRendererEvent, status: PresenceStatus) =>
+      handler(status)
+    ipcRenderer.on(IPC.PresenceUpdate, listener)
+    return () => ipcRenderer.removeListener(IPC.PresenceUpdate, listener)
   },
 }
 

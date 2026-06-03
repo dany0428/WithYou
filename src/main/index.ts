@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, Tray, screen, nativeImage } from 'electron'
 import path from 'node:path'
 import { registerIpc } from './ipc'
+import { startActivityMonitor, type ActivityMonitor } from './activity'
 
 // ---------------------------------------------------------------------------
 // Container/headless support (e.g. running inside GitHub Codespaces).
@@ -21,6 +22,7 @@ const TRAY_ICON_DATA_URL =
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+let activityMonitor: ActivityMonitor | null = null
 
 /** Anchor the widget to the bottom-right of the *primary* display's work area. */
 function positionWindow(win: BrowserWindow): void {
@@ -76,6 +78,10 @@ function createWindow(): void {
   }
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+
+  // The presence monitor may have settled on a status before the renderer was
+  // listening; replay it whenever the page (re)loads so the label is correct.
+  mainWindow.webContents.on('did-finish-load', () => activityMonitor?.resend())
 }
 
 function createTray(): void {
@@ -122,6 +128,7 @@ app.whenReady().then(() => {
   createWindow()
   createTray()
   registerIpc(() => mainWindow)
+  activityMonitor = startActivityMonitor(() => mainWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

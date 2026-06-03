@@ -5,6 +5,13 @@
 /** Visual/animation states the character can be in. */
 export type AnimationState = 'idle' | 'happy' | 'talking' | 'studying' | 'away'
 
+/**
+ * Detected presence of the *local* user, derived from OS input-idle time in the
+ * main process. Stage 2a only distinguishes active vs. away-from-keyboard; later
+ * slices add richer activity statuses (gaming / working / music / video …).
+ */
+export type PresenceStatus = 'active' | 'afk'
+
 /** Discrete reactions triggered by user interaction (one-shot animations). */
 export type ReactionKind = 'heart' | 'tilde' | 'bounce' | 'spin'
 
@@ -19,6 +26,8 @@ export const IPC = {
   ShowContextMenu: 'window:show-context-menu',
   /** Main -> renderer: a context-menu / tray action was chosen. */
   CharacterAction: 'character:action',
+  /** Main -> renderer: the local user's presence (active/afk) changed. */
+  PresenceUpdate: 'presence:update',
 } as const
 
 /**
@@ -33,4 +42,6 @@ export interface CoupleWidgetApi {
   showContextMenu(): void
   /** Subscribe to actions coming from the context menu / tray. Returns an unsubscribe fn. */
   onCharacterAction(handler: (action: CharacterAction) => void): () => void
+  /** Subscribe to local presence changes (active/afk). Returns an unsubscribe fn. */
+  onPresenceUpdate(handler: (status: PresenceStatus) => void): () => void
 }

@@ -7,7 +7,11 @@ import {
   type MouseEvent,
 } from 'react'
 import { useRive } from '@rive-app/react-canvas'
-import type { AnimationState, ReactionKind } from '../../shared/types'
+import type {
+  AnimationState,
+  PresenceStatus,
+  ReactionKind,
+} from '../../shared/types'
 // The cat animation, authored in Rive. `?url` makes Vite emit it as an asset and
 // hand us back its (hashed, production-safe) URL.
 import catIdleUrl from '../../../assets/characters/cat-idle.riv?url'
@@ -29,6 +33,14 @@ const STATE_BADGE: Record<AnimationState, string> = {
   away: '💤',
 }
 
+/** Text shown in the floating status label above the character. An empty string
+ *  hides the label (the active/default case needs no annotation). Stage 2a only
+ *  fills in `afk`; future activity statuses (gaming/working/…) extend this map. */
+const PRESENCE_LABEL: Record<PresenceStatus, string> = {
+  active: '',
+  afk: '💤 Away',
+}
+
 const REACTION_SYMBOL: Record<ReactionKind, string> = {
   heart: '♥',
   tilde: '~',
@@ -46,6 +58,7 @@ export interface CharacterHandle {
 interface CharacterProps {
   name: string
   state: AnimationState
+  presence: PresenceStatus
 }
 
 interface FloatingText {
@@ -58,7 +71,7 @@ type Reaction = 'none' | 'bounce' | 'spin'
 let floatId = 0
 
 const Character = forwardRef<CharacterHandle, CharacterProps>(function Character(
-  { name, state },
+  { name, state, presence },
   ref,
 ) {
   const [floats, setFloats] = useState<FloatingText[]>([])
@@ -75,7 +88,9 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   })
 
   const badge = STATE_BADGE[state]
-  const isAway = state === 'away'
+  const presenceLabel = PRESENCE_LABEL[presence]
+  // Dim the sprite when the local user is away, or for the explicit 'away' state.
+  const isAway = state === 'away' || presence === 'afk'
 
   // Auto-detect and play the file's state machine (so its pointer/look logic
   // runs). Fall back to the default timeline if the file has no state machine.
@@ -168,6 +183,14 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
 
   return (
     <div className="flex flex-col items-center justify-end gap-1 select-none">
+
+      {/* Floating presence/status label, hovering above the character. Hidden
+          when active; reserves no space so the character stays anchored. */}
+      {presenceLabel && (
+        <div className="pointer-events-none animate-float rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white shadow backdrop-blur-sm">
+          {presenceLabel}
+        </div>
+      )}
 
       {/* Character + floating reactions */}
       <div
