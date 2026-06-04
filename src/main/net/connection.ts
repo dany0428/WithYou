@@ -17,10 +17,6 @@ import type { Transport } from './transport'
 // so a freshly (re)loaded renderer can be reseeded via `resend()`.
 // ---------------------------------------------------------------------------
 
-/** Our own display name, sent to the partner. Comes from `COUPLE_NAME` for now;
- *  a settings UI will replace the env var later. */
-const SELF_NAME = process.env.COUPLE_NAME ?? 'Me'
-
 export interface Connection {
   /** Open the transport. */
   start(): void
@@ -37,7 +33,11 @@ export interface Connection {
 export function createConnection(
   getWindow: () => BrowserWindow | null,
   transport: Transport,
+  /** Our display name to send to the partner; read lazily so it reflects the
+   *  latest settings. Falls back to a neutral label when unset. */
+  getSelfName: () => string,
 ): Connection {
+  const selfName = () => getSelfName().trim() || 'Partner'
   let partner: PartnerPresence | null = null
   let state: ConnectionState = 'connecting'
   let localStatus: ActivityStatus = 'idle'
@@ -51,7 +51,7 @@ export function createConnection(
     state = next
     sendState()
     // On (re)connect, immediately tell the partner where we stand.
-    if (next === 'connected') transport.send({ name: SELF_NAME, status: localStatus })
+    if (next === 'connected') transport.send({ name: selfName(), status: localStatus })
   })
 
   transport.onMessage((message) => {
@@ -71,7 +71,7 @@ export function createConnection(
     },
     setLocalStatus(status) {
       localStatus = status
-      transport.send({ name: SELF_NAME, status })
+      transport.send({ name: selfName(), status })
     },
     sendEmote(kind) {
       transport.sendEmote(kind)

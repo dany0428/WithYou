@@ -78,8 +78,10 @@ interface CharacterProps {
   state: AnimationState
   /** The partner's detected activity status. */
   activity: ActivityStatus
-  /** Link state to the partner; gates whether the activity is meaningful. */
+  /** Our link state to the relay; distinguishes "connecting" from "offline". */
   connection: ConnectionState
+  /** Whether the partner is actually present (online and reachable). */
+  partnerOnline: boolean
 }
 
 interface FloatingText {
@@ -92,7 +94,7 @@ type Reaction = 'none' | 'bounce' | 'spin'
 let floatId = 0
 
 const Character = forwardRef<CharacterHandle, CharacterProps>(function Character(
-  { name, state, activity, connection },
+  { name, state, activity, connection, partnerOnline },
   ref,
 ) {
   const [floats, setFloats] = useState<FloatingText[]>([])
@@ -109,16 +111,17 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   })
 
   const badge = STATE_BADGE[state]
-  const connected = connection === 'connected'
-  // While not connected, the partner's activity is unknown — show the link state
-  // instead. Connected + idle shows no label (the calm default).
-  const statusLabel = connected
-    ? ACTIVITY_LABEL[activity]
-    : connection === 'connecting'
+  // The partner's activity is only meaningful while they're actually online.
+  // Show "Connecting" only while our own link is still coming up; otherwise the
+  // partner being absent reads as "Offline". Online + idle shows no label.
+  const statusLabel =
+    connection === 'connecting'
       ? '… Connecting'
-      : '⚪ Offline'
-  // Dim the sprite when away, the explicit 'away' state, or while disconnected.
-  const isAway = !connected || state === 'away' || activity === 'afk'
+      : partnerOnline
+        ? ACTIVITY_LABEL[activity]
+        : '⚪ Offline'
+  // Dim the sprite when the partner is offline, in the explicit 'away' state, or AFK.
+  const isAway = !partnerOnline || state === 'away' || activity === 'afk'
 
   // Auto-detect and play the file's state machine (so its pointer/look logic
   // runs). Fall back to the default timeline if the file has no state machine.
@@ -218,8 +221,8 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
     <div className="flex flex-col items-center justify-end gap-1 select-none">
 
       {/* Floating status label, hovering above the character: the partner's
-          activity when connected, otherwise the link state. Hidden when
-          connected + idle; reserves no space so the character stays anchored. */}
+          activity when they're online, otherwise Connecting/Offline. Hidden when
+          online + idle; reserves no space so the character stays anchored. */}
       {statusLabel && (
         <div className="pointer-events-none animate-float rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white shadow backdrop-blur-sm">
           {statusLabel}

@@ -161,7 +161,7 @@ function rebuildConnection(): void {
   // The partner-presence signal drives the "online together" timer; registered
   // here (not in the connection) so the connection stays a pure presence bridge.
   transport.onPartnerPresence((online) => uptime?.setOnline(online))
-  connection = createConnection(() => mainWindow, transport)
+  connection = createConnection(() => mainWindow, transport, () => loadSettings().name)
   connection.start()
   // Push our current detected status into the fresh connection so the partner
   // is repopulated immediately rather than waiting for the next change.

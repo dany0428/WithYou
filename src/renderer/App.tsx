@@ -90,6 +90,7 @@ export default function App() {
           state={state}
           activity={partner.status}
           connection={connection}
+          partnerOnline={uptime?.online ?? false}
         />
         {/* "Online together" badge — only while the partner is actually online. */}
         {uptime?.online && (
