@@ -66,7 +66,9 @@ export function installDemoMock(): void {
       return Promise.resolve(demoSettings)
     },
     closeSettings() {
-      /* no-op in the browser — there's no OS window to close */
+      // No OS window to close in the browser — return to the widget view.
+      window.location.hash = ''
+      window.location.reload()
     },
   }
   window.couple = api
@@ -135,12 +137,24 @@ export function installDemoMock(): void {
       item.onmouseleave = () => (item.style.background = 'transparent')
       item.onclick = () => {
         menu.remove()
-        fire(action)
+        document.removeEventListener('mousedown', close)
+        if (action === 'settings') {
+          // No tray/window in the browser — preview the settings page in place.
+          window.location.hash = 'settings'
+          window.location.reload()
+        } else {
+          fire(action)
+        }
       }
       menu.appendChild(item)
     })
     document.body.appendChild(menu)
-    const close = () => {
+    // Close on an *outside* click. Crucially, ignore mousedowns inside the menu:
+    // otherwise the menu is removed before the item's `click` fires and the
+    // action is lost. (Declared as a hoisted function so the item handlers above
+    // can reference it.)
+    function close(ev: globalThis.MouseEvent) {
+      if (menu.contains(ev.target as Node)) return
       menu.remove()
       document.removeEventListener('mousedown', close)
     }
