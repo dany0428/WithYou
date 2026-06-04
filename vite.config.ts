@@ -37,6 +37,9 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
+              // `ws` is a CJS dependency with optional native add-ons; require it
+              // at runtime (electron-builder packages it) instead of bundling.
+              external: ['ws'],
               output: { format: 'cjs', entryFileNames: 'main.js' },
             },
           },

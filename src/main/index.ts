@@ -4,6 +4,8 @@ import { registerIpc } from './ipc'
 import { startActivityMonitor, type ActivityMonitor } from './activity'
 import { createConnection, type Connection } from './net/connection'
 import { createLoopbackTransport } from './net/loopbackTransport'
+import { createWebSocketTransport } from './net/wsTransport'
+import type { Transport } from './net/transport'
 
 // ---------------------------------------------------------------------------
 // Container/headless support (e.g. running inside GitHub Codespaces).
@@ -131,12 +133,31 @@ if (process.platform === 'darwin') {
   app.dock?.hide()
 }
 
+/**
+ * Pick the partner link from the environment. Set `COUPLE_RELAY_URL` *and*
+ * `COUPLE_PAIR_CODE` (the same code on both PCs) to use the real WebSocket
+ * relay; with neither, we fall back to the in-process loopback so the app still
+ * runs standalone for UI work. `COUPLE_NAME` is the name shown on the partner's
+ * screen. (A settings UI will replace these env vars later.)
+ */
+function createTransport(): Transport {
+  const url = process.env.COUPLE_RELAY_URL
+  const room = process.env.COUPLE_PAIR_CODE
+  const name = process.env.COUPLE_NAME ?? 'Me'
+  if (url && room) {
+    console.log(`[net] relay transport -> ${url} (room: ${room})`)
+    return createWebSocketTransport({ url, room, name })
+  }
+  console.log('[net] no COUPLE_RELAY_URL/COUPLE_PAIR_CODE set; using loopback transport')
+  return createLoopbackTransport()
+}
+
 app.whenReady().then(() => {
   createWindow()
   createTray()
   // Detection feeds the connection (outbound); the connection feeds the
-  // renderer (inbound partner presence). Loopback transport for now.
-  connection = createConnection(() => mainWindow, createLoopbackTransport())
+  // renderer (inbound partner presence). Transport chosen from the environment.
+  connection = createConnection(() => mainWindow, createTransport())
   activityMonitor = startActivityMonitor((status) =>
     connection?.setLocalStatus(status),
   )

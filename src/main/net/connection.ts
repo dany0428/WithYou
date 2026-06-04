@@ -16,9 +16,9 @@ import type { Transport } from './transport'
 // so a freshly (re)loaded renderer can be reseeded via `resend()`.
 // ---------------------------------------------------------------------------
 
-/** Our own display name, sent to the partner. Real value will come from
- *  settings once those exist; for now it's a constant. */
-const SELF_NAME = 'Me'
+/** Our own display name, sent to the partner. Comes from `COUPLE_NAME` for now;
+ *  a settings UI will replace the env var later. */
+const SELF_NAME = process.env.COUPLE_NAME ?? 'Me'
 
 export interface Connection {
   /** Open the transport. */

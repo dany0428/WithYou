@@ -1,0 +1,17 @@
+{
+  "name": "couplewidget-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Presence relay server for CoupleWidget (forwards partner presence between two apps).",
+  "type": "module",
+  "main": "relay.mjs",
+  "scripts": {
+    "start": "node relay.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
