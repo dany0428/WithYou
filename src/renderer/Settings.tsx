@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings } from '../shared/types'
+import { formatDurationLong } from './util/duration'
+import type { AppSettings, UptimeStats } from '../shared/types'
 
 // ---------------------------------------------------------------------------
 // Settings window (opened from the tray / character menu). Edits the persisted
@@ -16,12 +17,19 @@ export default function Settings() {
   const [form, setForm] = useState<AppSettings>(EMPTY)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uptime, setUptime] = useState<UptimeStats | null>(null)
 
   useEffect(() => {
     window.couple.getSettings().then((s) => {
       setForm(s)
       setLoaded(true)
     })
+  }, [])
+
+  // Live "online together" stats.
+  useEffect(() => window.couple.onUptimeUpdate(setUptime), [])
+  useEffect(() => {
+    window.couple.getUptime().then(setUptime)
   }, [])
 
   const set = (key: keyof AppSettings) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -47,7 +55,30 @@ export default function Settings() {
         Connect to your partner, or leave the relay fields empty to run offline.
       </p>
 
-      <div className="mt-6 flex flex-1 flex-col gap-5">
+      {/* "Online together" stats card. */}
+      <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">Time together</span>
+          <span
+            className={`flex items-center gap-1 text-[11px] ${
+              uptime?.online ? 'text-emerald-300' : 'text-slate-500'
+            }`}
+          >
+            <span className="text-[8px]">●</span>
+            {uptime?.online ? 'Online now' : 'Offline'}
+          </span>
+        </div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums">
+          {uptime ? formatDurationLong(uptime.totalMs) : '—'}
+        </div>
+        {uptime?.online && uptime.sessionMs >= 60_000 && (
+          <div className="mt-0.5 text-xs text-slate-500">
+            This session: {formatDurationLong(uptime.sessionMs)}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-5 flex flex-1 flex-col gap-5">
         <Field
           label="Your name"
           hint="Shown on your partner's screen."

@@ -21,6 +21,7 @@ const CONNECT_DELAY_MS = 300
 export function createLoopbackTransport(): Transport {
   let messageHandler: ((m: PresenceMessage) => void) | null = null
   let stateHandler: ((s: ConnectionState) => void) | null = null
+  let partnerHandler: ((online: boolean) => void) | null = null
   let connected = false
   const timers = new Set<NodeJS.Timeout>()
 
@@ -38,12 +39,15 @@ export function createLoopbackTransport(): Transport {
       later(() => {
         connected = true
         stateHandler?.('connected')
+        // The simulated partner is "always there", so they come online with us.
+        partnerHandler?.(true)
       }, CONNECT_DELAY_MS)
     },
     stop() {
       for (const t of timers) clearTimeout(t)
       timers.clear()
       connected = false
+      partnerHandler?.(false)
       stateHandler?.('disconnected')
     },
     send(message) {
@@ -58,6 +62,9 @@ export function createLoopbackTransport(): Transport {
     },
     onState(handler) {
       stateHandler = handler
+    },
+    onPartnerPresence(handler) {
+      partnerHandler = handler
     },
   }
 }

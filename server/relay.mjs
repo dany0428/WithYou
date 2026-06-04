@@ -16,6 +16,8 @@
 //   client -> relay  { type: 'join',     room, name }
 //   client -> relay  { type: 'presence', name, status }
 //   relay  -> client { type: 'presence', name, status }   // the partner's
+//   relay  -> client { type: 'partner-online' }           // partner joined
+//   relay  -> client { type: 'partner-offline' }          // partner left
 //   relay  -> client { type: 'error',    reason }         // e.g. room-full
 // ---------------------------------------------------------------------------
 
@@ -63,9 +65,14 @@ wss.on('connection', (ws) => {
       ws.name = typeof msg.name === 'string' ? msg.name : 'Partner'
       peers.add(ws)
       rooms.set(room, peers)
-      // Catch the newcomer up with whatever the other peer last reported.
+      // Tell each side about the other: the newcomer learns an existing partner
+      // is online (plus their last status), and any existing peer learns the
+      // newcomer just came online.
       for (const peer of peers) {
-        if (peer !== ws && peer.lastPresence) send(ws, { type: 'presence', ...peer.lastPresence })
+        if (peer === ws) continue
+        send(ws, { type: 'partner-online' })
+        if (peer.lastPresence) send(ws, { type: 'presence', ...peer.lastPresence })
+        send(peer, { type: 'partner-online' })
       }
       console.log(`[relay] join room=${room} name=${ws.name} size=${peers.size}`)
       return
@@ -87,6 +94,8 @@ wss.on('connection', (ws) => {
     const peers = rooms.get(ws.room)
     if (!peers) return
     peers.delete(ws)
+    // Let whoever's left know their partner went offline.
+    for (const peer of peers) send(peer, { type: 'partner-offline' })
     if (peers.size === 0) rooms.delete(ws.room)
     console.log(`[relay] leave room=${ws.room} remaining=${peers.size}`)
   })

@@ -7,6 +7,7 @@ import { createLoopbackTransport } from './net/loopbackTransport'
 import { createWebSocketTransport } from './net/wsTransport'
 import type { Transport } from './net/transport'
 import { loadSettings } from './settings'
+import { createUptimeTracker, type UptimeTracker } from './uptime'
 
 // ---------------------------------------------------------------------------
 // Container/headless support (e.g. running inside GitHub Codespaces).
@@ -33,6 +34,7 @@ let settingsWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let activityMonitor: ActivityMonitor | null = null
 let connection: Connection | null = null
+let uptime: UptimeTracker | null = null
 
 /** Anchor the widget to the bottom-right of the *primary* display's work area. */
 function positionWindow(win: BrowserWindow): void {
@@ -154,7 +156,11 @@ function createTransport(): Transport {
  *  on startup and whenever settings are saved. */
 function rebuildConnection(): void {
   connection?.stop()
-  connection = createConnection(() => mainWindow, createTransport())
+  const transport = createTransport()
+  // The partner-presence signal drives the "online together" timer; registered
+  // here (not in the connection) so the connection stays a pure presence bridge.
+  transport.onPartnerPresence((online) => uptime?.setOnline(online))
+  connection = createConnection(() => mainWindow, transport)
   connection.start()
   // Push our current detected status into the fresh connection so the partner
   // is repopulated immediately rather than waiting for the next change.
@@ -199,13 +205,14 @@ function openSettingsWindow(): void {
 app.whenReady().then(() => {
   createWindow()
   createTray()
+  uptime = createUptimeTracker()
   // Detection feeds the connection (outbound); the connection feeds the
   // renderer (inbound partner presence). Transport chosen from saved settings.
   activityMonitor = startActivityMonitor((status) =>
     connection?.setLocalStatus(status),
   )
   rebuildConnection()
-  registerIpc(() => mainWindow, () => activityMonitor, {
+  registerIpc(() => mainWindow, () => activityMonitor, () => uptime, {
     openSettings: openSettingsWindow,
     closeSettings: () => settingsWindow?.close(),
     onSettingsChanged: rebuildConnection,
@@ -215,6 +222,9 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
+
+// Bank any in-progress "online together" time before the process exits.
+app.on('before-quit', () => uptime?.stop())
 
 // The widget lives in the tray; don't quit when the (only) window is hidden.
 app.on('window-all-closed', () => {

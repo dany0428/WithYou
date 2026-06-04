@@ -5,6 +5,7 @@ import type {
   CharacterAction,
   ConnectionState,
   CoupleWidgetApi,
+  UptimeStats,
 } from '../../shared/types'
 
 // Browser-only demo shim. When the app runs in a plain browser (no Electron
@@ -20,9 +21,12 @@ export function installDemoMock(): void {
   let actionHandler: ((action: CharacterAction) => void) | null = null
   let partnerHandler: ((p: { name: string; status: ActivityStatus }) => void) | null = null
   let connectionHandler: ((s: ConnectionState) => void) | null = null
+  let uptimeHandler: ((stats: UptimeStats) => void) | null = null
   let lastPos = { x: window.innerWidth - 90, y: window.innerHeight - 150 }
   // In-memory settings so the settings view can be previewed in a plain browser.
   let demoSettings: AppSettings = { name: '', pairCode: '', relayUrl: '' }
+  // Simulated "online together" stats, seeded so the counter is visible.
+  let uptime: UptimeStats = { online: false, sessionMs: 0, totalMs: 3 * 3_600_000 + 12 * 60_000 }
 
   // Remember where the last right-click happened so the menu opens there.
   document.addEventListener(
@@ -70,6 +74,15 @@ export function installDemoMock(): void {
       window.location.hash = ''
       window.location.reload()
     },
+    onUptimeUpdate(handler) {
+      uptimeHandler = handler
+      return () => {
+        if (uptimeHandler === handler) uptimeHandler = null
+      }
+    },
+    getUptime() {
+      return Promise.resolve(uptime)
+    },
   }
   window.couple = api
 
@@ -79,7 +92,24 @@ export function installDemoMock(): void {
   const fire = (action: CharacterAction) => actionHandler?.(action)
   const firePartner = (status: ActivityStatus) =>
     partnerHandler?.({ name: 'Partner', status })
-  const fireConnection = (state: ConnectionState) => connectionHandler?.(state)
+
+  // Drive the simulated "online together" counter from the connection state:
+  // online while connected, frozen otherwise; tick once a second.
+  const pushUptime = () => uptimeHandler?.({ ...uptime })
+  window.setInterval(() => {
+    if (!uptime.online) return
+    uptime = { ...uptime, sessionMs: uptime.sessionMs + 1000, totalMs: uptime.totalMs + 1000 }
+    pushUptime()
+  }, 1000)
+
+  const fireConnection = (state: ConnectionState) => {
+    connectionHandler?.(state)
+    const online = state === 'connected'
+    if (online !== uptime.online) {
+      uptime = { ...uptime, online, sessionMs: online ? 0 : uptime.sessionMs }
+      pushUptime()
+    }
+  }
 
   // Simulate the loopback transport connecting shortly after load.
   setTimeout(() => fireConnection('connected'), 400)

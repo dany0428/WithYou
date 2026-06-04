@@ -34,6 +34,7 @@ const PING_INTERVAL_MS = 25_000
 export function createWebSocketTransport(opts: WebSocketTransportOptions): Transport {
   let messageHandler: ((m: PresenceMessage) => void) | null = null
   let stateHandler: ((s: ConnectionState) => void) | null = null
+  let partnerHandler: ((online: boolean) => void) | null = null
 
   let ws: WebSocket | null = null
   let stopped = false
@@ -79,7 +80,14 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
       } catch {
         return
       }
-      if (msg.type === 'presence' && typeof msg.status === 'string') {
+      if (msg.type === 'partner-online') {
+        partnerHandler?.(true)
+      } else if (msg.type === 'partner-offline') {
+        partnerHandler?.(false)
+      } else if (msg.type === 'presence' && typeof msg.status === 'string') {
+        // Presence implies the partner is present, even if we missed the
+        // explicit online signal (e.g. we joined after them).
+        partnerHandler?.(true)
         messageHandler?.({
           name: typeof msg.name === 'string' ? msg.name : 'Partner',
           status: msg.status as PresenceMessage['status'],
@@ -93,6 +101,8 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
     socket.on('close', () => {
       if (pingTimer) clearInterval(pingTimer)
       pingTimer = null
+      // Our link dropped, so we can no longer vouch for the partner being online.
+      partnerHandler?.(false)
       setState('disconnected')
       scheduleReconnect()
     })
@@ -110,6 +120,7 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
       ws?.removeAllListeners()
       ws?.close()
       ws = null
+      partnerHandler?.(false)
       setState('disconnected')
     },
     send(message) {
@@ -122,6 +133,9 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
     },
     onState(handler) {
       stateHandler = handler
+    },
+    onPartnerPresence(handler) {
+      partnerHandler = handler
     },
   }
 }

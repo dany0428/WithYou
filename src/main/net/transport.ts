@@ -20,4 +20,9 @@ export interface Transport {
   onMessage(handler: (message: PresenceMessage) => void): void
   /** Register the handler for connection-state changes. */
   onState(handler: (state: ConnectionState) => void): void
+  /**
+   * Register the handler for the partner coming online / going offline (i.e.
+   * joining or leaving the shared room). Drives the "online together" timer.
+   */
+  onPartnerPresence(handler: (online: boolean) => void): void
 }

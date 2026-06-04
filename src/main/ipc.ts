@@ -3,6 +3,7 @@ import type { MenuItemConstructorOptions } from 'electron'
 import { IPC, type ActivityStatus, type AppSettings, type CharacterAction } from '../shared/types'
 import type { ActivityMonitor } from './activity'
 import { loadSettings, saveSettings } from './settings'
+import type { UptimeTracker } from './uptime'
 
 /** Hooks the main process supplies so IPC can drive window/connection lifecycle. */
 export interface IpcHooks {
@@ -35,6 +36,7 @@ const STATUS_ITEMS: ReadonlyArray<{ label: string; status: ActivityStatus }> = [
 export function registerIpc(
   getWindow: () => BrowserWindow | null,
   getMonitor: () => ActivityMonitor | null,
+  getUptime: () => UptimeTracker | null,
   hooks: IpcHooks,
 ): void {
   // Settings window <-> persistence. Saving also rebuilds the connection so a
@@ -46,6 +48,9 @@ export function registerIpc(
     return saved
   })
   ipcMain.on(IPC.CloseSettings, () => hooks.closeSettings())
+
+  // Initial uptime snapshot for a freshly-loaded window (live updates are pushed).
+  ipcMain.handle(IPC.GetUptime, () => getUptime()?.current() ?? null)
 
   // Renderer toggles click-through as the cursor enters/leaves the character.
   // `forward: true` keeps move events flowing so the renderer can re-detect a

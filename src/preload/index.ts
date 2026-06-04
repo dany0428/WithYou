@@ -6,6 +6,7 @@ import {
   type ConnectionState,
   type CoupleWidgetApi,
   type PartnerPresence,
+  type UptimeStats,
 } from '../shared/types'
 
 // The preload runs in an isolated context with access to a limited set of Node
@@ -44,6 +45,15 @@ const api: CoupleWidgetApi = {
   },
   closeSettings() {
     ipcRenderer.send(IPC.CloseSettings)
+  },
+  onUptimeUpdate(handler) {
+    const listener = (_event: Electron.IpcRendererEvent, stats: UptimeStats) =>
+      handler(stats)
+    ipcRenderer.on(IPC.UptimeUpdate, listener)
+    return () => ipcRenderer.removeListener(IPC.UptimeUpdate, listener)
+  },
+  getUptime() {
+    return ipcRenderer.invoke(IPC.GetUptime) as Promise<UptimeStats>
   },
 }
 

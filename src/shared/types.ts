@@ -59,6 +59,21 @@ export interface AppSettings {
   relayUrl: string
 }
 
+/**
+ * "Online together" time, computed in the main process and pushed to the
+ * renderer. The clock runs only while the partner is present *and* our link is
+ * up; `totalMs` is cumulative across all sessions (persisted), `sessionMs` is the
+ * current continuous stretch.
+ */
+export interface UptimeStats {
+  /** True while the partner is online and our link is up. */
+  online: boolean
+  /** Continuous ms the partner has been online this session (0 when offline). */
+  sessionMs: number
+  /** Cumulative ms online together across all sessions. */
+  totalMs: number
+}
+
 /** Discrete reactions triggered by user interaction (one-shot animations). */
 export type ReactionKind = 'heart' | 'tilde' | 'bounce' | 'spin'
 
@@ -83,6 +98,10 @@ export const IPC = {
   SaveSettings: 'settings:save',
   /** Renderer -> main: close the settings window. */
   CloseSettings: 'settings:close',
+  /** Main -> renderer: updated "online together" stats. */
+  UptimeUpdate: 'uptime:update',
+  /** Renderer -> main (invoke): read the current uptime stats. */
+  GetUptime: 'uptime:get',
 } as const
 
 /**
@@ -107,4 +126,8 @@ export interface CoupleWidgetApi {
   saveSettings(settings: AppSettings): Promise<AppSettings>
   /** Close the settings window. */
   closeSettings(): void
+  /** Subscribe to "online together" stat updates. Returns an unsubscribe fn. */
+  onUptimeUpdate(handler: (stats: UptimeStats) => void): () => void
+  /** Read the current uptime stats (for initial render). */
+  getUptime(): Promise<UptimeStats>
 }
