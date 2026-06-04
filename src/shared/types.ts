@@ -44,6 +44,21 @@ export interface PresenceMessage {
   status: ActivityStatus
 }
 
+/**
+ * User-editable settings, persisted by the main process and edited in the
+ * settings window. These replace the `COUPLE_*` environment variables: with a
+ * `relayUrl` *and* `pairCode` set the app uses the real relay, otherwise it runs
+ * offline on the loopback transport.
+ */
+export interface AppSettings {
+  /** Your display name, shown on the partner's screen. */
+  name: string
+  /** Shared pairing code — must match the partner's exactly. */
+  pairCode: string
+  /** Relay URL (`ws://` or `wss://`). Empty means offline (loopback). */
+  relayUrl: string
+}
+
 /** Discrete reactions triggered by user interaction (one-shot animations). */
 export type ReactionKind = 'heart' | 'tilde' | 'bounce' | 'spin'
 
@@ -62,6 +77,12 @@ export const IPC = {
   PartnerUpdate: 'partner:update',
   /** Main -> renderer: the connection to the partner changed state. */
   ConnectionState: 'connection:state',
+  /** Renderer -> main (invoke): read the persisted settings. */
+  GetSettings: 'settings:get',
+  /** Renderer -> main (invoke): persist settings; reconnects with the new link. */
+  SaveSettings: 'settings:save',
+  /** Renderer -> main: close the settings window. */
+  CloseSettings: 'settings:close',
 } as const
 
 /**
@@ -80,4 +101,10 @@ export interface CoupleWidgetApi {
   onPartnerUpdate(handler: (partner: PartnerPresence) => void): () => void
   /** Subscribe to connection-state changes. Returns an unsubscribe fn. */
   onConnectionState(handler: (state: ConnectionState) => void): () => void
+  /** Read the persisted settings (settings window). */
+  getSettings(): Promise<AppSettings>
+  /** Persist settings; the main process reconnects with the new link. */
+  saveSettings(settings: AppSettings): Promise<AppSettings>
+  /** Close the settings window. */
+  closeSettings(): void
 }

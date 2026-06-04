@@ -6,6 +6,7 @@ import { createConnection, type Connection } from './net/connection'
 import { createLoopbackTransport } from './net/loopbackTransport'
 import { createWebSocketTransport } from './net/wsTransport'
 import type { Transport } from './net/transport'
+import { loadSettings } from './settings'
 
 // ---------------------------------------------------------------------------
 // Container/headless support (e.g. running inside GitHub Codespaces).
@@ -24,7 +25,11 @@ const WIDGET_HEIGHT = 300
 const TRAY_ICON_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACzUlEQVR4nO2X61ITQRCF8wD88pl8AN3cSCDcEaMiFKVVPoTJxoREQmIQwUvlVXgB/wohiIiAIApqtfWdhCVgEAVl+eFWTc1OT8+c06d7Z3cDgf/XOa831x5eKFjH4vXU1UUnNb7kpDNLwfTcUjBdVe+kM9iZx+9vA19ZdFKDgNVCbr0Wdm05nLHlSEsLZww78/jhz7pzgxMREdZC7j4g9egjW4lmbaWz2WIt99Gs5kUm5O6zjvVnB3dSiVrQXfCAO7P2Npaz1fikrXY12ruuvHePnXn8PCJBd4F9zgYecl8jL5EJGMDuvK0lCrbWU7D3PY+9xhg78/iJSDSr9LDPH5FANkUOOFHHc4oUAMDW+6bUPvQXvXZgExmIdOW1jvUigRK/kw4Kh9whnyIHnKh7Crbe2wDdGJi2jcFp2xwqeY0xdpHpnZI/60QCJcIZY99TC5PqpYDIITIqcsCJeKBom4Ml2xou29aNsn0ceeI1xtiZxw9/kUCJWE41wb7s/6voO3iEFH1nVrlETkUO+FBJQNsjFdtOVmwnOWM7t2bUM8bOPH4igRKJgvZRKhoqVE88J5T7kFv3ou/OK6fIqsgBv1kR6KfbT233zqztjs6qZ4ydeZFAif6i1isVhyrUT6wFTjIOE3LGI6Xo+6aUW+QlQkAA/Hz3mX0Zm7O9sXn1jLGLBEoMl7VOqUCF+KT2ZX9w2hLgOD0ifzP3FJiiT1YUKWB74/O2P/Hcvk68UM8YO/P44c+6g1o4kgYnnWlPgOqPHBLw5B8qqdDINVESMaDf7r207/dfqWeMXSokZ+SvWmimwSMQaTwN7QowoAKEQCyr6v2JAPKPzkp2IgfcHlTVM8bOPH7HCbAf+zYJVNu+RX1V4FLUgO9Pge/ngO8nYcDvd0HgMrwNA35/D7Skwr8voiMk/Pom9Ej4+VV8cPn6X3CMiD9/RqeQujCsf3L9AO5In0f2Z9+SAAAAAElFTkSuQmCC'
 
+const SETTINGS_WIDTH = 440
+const SETTINGS_HEIGHT = 520
+
 let mainWindow: BrowserWindow | null = null
+let settingsWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let activityMonitor: ActivityMonitor | null = null
 let connection: Connection | null = null
@@ -111,10 +116,7 @@ function createTray(): void {
       },
       {
         label: 'Settings…',
-        click: () => {
-          // Placeholder for Stage 1 — wire up a settings window later.
-          mainWindow?.webContents.send('character:action', 'settings')
-        },
+        click: () => openSettingsWindow(),
       },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() },
@@ -134,35 +136,80 @@ if (process.platform === 'darwin') {
 }
 
 /**
- * Pick the partner link from the environment. Set `COUPLE_RELAY_URL` *and*
- * `COUPLE_PAIR_CODE` (the same code on both PCs) to use the real WebSocket
- * relay; with neither, we fall back to the in-process loopback so the app still
- * runs standalone for UI work. `COUPLE_NAME` is the name shown on the partner's
- * screen. (A settings UI will replace these env vars later.)
+ * Pick the partner link from the saved settings: with a relay URL *and* a
+ * pairing code we use the real WebSocket relay, otherwise we fall back to the
+ * in-process loopback so the app still runs standalone for UI work.
  */
 function createTransport(): Transport {
-  const url = process.env.COUPLE_RELAY_URL
-  const room = process.env.COUPLE_PAIR_CODE
-  const name = process.env.COUPLE_NAME ?? 'Me'
-  if (url && room) {
-    console.log(`[net] relay transport -> ${url} (room: ${room})`)
-    return createWebSocketTransport({ url, room, name })
+  const { relayUrl, pairCode, name } = loadSettings()
+  if (relayUrl && pairCode) {
+    console.log(`[net] relay transport -> ${relayUrl} (room: ${pairCode})`)
+    return createWebSocketTransport({ url: relayUrl, room: pairCode, name: name || 'Me' })
   }
-  console.log('[net] no COUPLE_RELAY_URL/COUPLE_PAIR_CODE set; using loopback transport')
+  console.log('[net] no relay URL / pairing code set; using loopback transport')
   return createLoopbackTransport()
+}
+
+/** (Re)build the partner connection from current settings and start it. Called
+ *  on startup and whenever settings are saved. */
+function rebuildConnection(): void {
+  connection?.stop()
+  connection = createConnection(() => mainWindow, createTransport())
+  connection.start()
+  // Push our current detected status into the fresh connection so the partner
+  // is repopulated immediately rather than waiting for the next change.
+  activityMonitor?.resend()
+}
+
+/** Open the settings window, or focus it if already open. */
+function openSettingsWindow(): void {
+  if (settingsWindow) {
+    settingsWindow.show()
+    settingsWindow.focus()
+    return
+  }
+  settingsWindow = new BrowserWindow({
+    width: SETTINGS_WIDTH,
+    height: SETTINGS_HEIGHT,
+    title: 'CoupleWidget — Settings',
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    backgroundColor: '#11131a',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  settingsWindow.on('closed', () => {
+    settingsWindow = null
+  })
+
+  // Same renderer bundle, routed to the settings view via the URL hash.
+  if (process.env.VITE_DEV_SERVER_URL) {
+    settingsWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}#settings`)
+  } else {
+    settingsWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: 'settings' })
+  }
 }
 
 app.whenReady().then(() => {
   createWindow()
   createTray()
   // Detection feeds the connection (outbound); the connection feeds the
-  // renderer (inbound partner presence). Transport chosen from the environment.
-  connection = createConnection(() => mainWindow, createTransport())
+  // renderer (inbound partner presence). Transport chosen from saved settings.
   activityMonitor = startActivityMonitor((status) =>
     connection?.setLocalStatus(status),
   )
-  connection.start()
-  registerIpc(() => mainWindow, () => activityMonitor)
+  rebuildConnection()
+  registerIpc(() => mainWindow, () => activityMonitor, {
+    openSettings: openSettingsWindow,
+    closeSettings: () => settingsWindow?.close(),
+    onSettingsChanged: rebuildConnection,
+  })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

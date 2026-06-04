@@ -1,7 +1,18 @@
 import { BrowserWindow, Menu, ipcMain } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
-import { IPC, type ActivityStatus, type CharacterAction } from '../shared/types'
+import { IPC, type ActivityStatus, type AppSettings, type CharacterAction } from '../shared/types'
 import type { ActivityMonitor } from './activity'
+import { loadSettings, saveSettings } from './settings'
+
+/** Hooks the main process supplies so IPC can drive window/connection lifecycle. */
+export interface IpcHooks {
+  /** Open (or focus) the settings window. */
+  openSettings: () => void
+  /** Close the settings window. */
+  closeSettings: () => void
+  /** Rebuild the partner connection after settings change. */
+  onSettingsChanged: () => void
+}
 
 /** Selectable statuses for the manual-override submenu, in display order. */
 const STATUS_ITEMS: ReadonlyArray<{ label: string; status: ActivityStatus }> = [
@@ -24,7 +35,18 @@ const STATUS_ITEMS: ReadonlyArray<{ label: string; status: ActivityStatus }> = [
 export function registerIpc(
   getWindow: () => BrowserWindow | null,
   getMonitor: () => ActivityMonitor | null,
+  hooks: IpcHooks,
 ): void {
+  // Settings window <-> persistence. Saving also rebuilds the connection so a
+  // new relay URL / pairing code takes effect immediately.
+  ipcMain.handle(IPC.GetSettings, () => loadSettings())
+  ipcMain.handle(IPC.SaveSettings, (_event, settings: AppSettings) => {
+    const saved = saveSettings(settings)
+    hooks.onSettingsChanged()
+    return saved
+  })
+  ipcMain.on(IPC.CloseSettings, () => hooks.closeSettings())
+
   // Renderer toggles click-through as the cursor enters/leaves the character.
   // `forward: true` keeps move events flowing so the renderer can re-detect a
   // leave even while the window is ignoring clicks.
@@ -69,7 +91,7 @@ export function registerIpc(
       { label: 'Send Heart', click: () => send('send-heart') },
       { type: 'separator' },
       { label: 'Status', submenu: statusSubmenu },
-      { label: 'Settings', click: () => send('settings') },
+      { label: 'Settings…', click: () => hooks.openSettings() },
     ])
 
     menu.popup({ window: win })

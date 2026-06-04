@@ -1,6 +1,7 @@
 import type {
   ActivityStatus,
   AnimationState,
+  AppSettings,
   CharacterAction,
   ConnectionState,
   CoupleWidgetApi,
@@ -20,6 +21,8 @@ export function installDemoMock(): void {
   let partnerHandler: ((p: { name: string; status: ActivityStatus }) => void) | null = null
   let connectionHandler: ((s: ConnectionState) => void) | null = null
   let lastPos = { x: window.innerWidth - 90, y: window.innerHeight - 150 }
+  // In-memory settings so the settings view can be previewed in a plain browser.
+  let demoSettings: AppSettings = { name: '', pairCode: '', relayUrl: '' }
 
   // Remember where the last right-click happened so the menu opens there.
   document.addEventListener(
@@ -55,8 +58,21 @@ export function installDemoMock(): void {
         if (connectionHandler === handler) connectionHandler = null
       }
     },
+    getSettings() {
+      return Promise.resolve(demoSettings)
+    },
+    saveSettings(settings) {
+      demoSettings = settings
+      return Promise.resolve(demoSettings)
+    },
+    closeSettings() {
+      /* no-op in the browser — there's no OS window to close */
+    },
   }
   window.couple = api
+
+  // The settings view is a standalone page; skip the faux-desktop chrome below.
+  if (window.location.hash.replace(/^#/, '') === 'settings') return
 
   const fire = (action: CharacterAction) => actionHandler?.(action)
   const firePartner = (status: ActivityStatus) =>

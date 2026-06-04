@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC,
+  type AppSettings,
   type CharacterAction,
   type ConnectionState,
   type CoupleWidgetApi,
@@ -34,6 +35,15 @@ const api: CoupleWidgetApi = {
       handler(state)
     ipcRenderer.on(IPC.ConnectionState, listener)
     return () => ipcRenderer.removeListener(IPC.ConnectionState, listener)
+  },
+  getSettings() {
+    return ipcRenderer.invoke(IPC.GetSettings) as Promise<AppSettings>
+  },
+  saveSettings(settings) {
+    return ipcRenderer.invoke(IPC.SaveSettings, settings) as Promise<AppSettings>
+  },
+  closeSettings() {
+    ipcRenderer.send(IPC.CloseSettings)
   },
 }
 
