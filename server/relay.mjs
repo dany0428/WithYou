@@ -15,7 +15,9 @@
 // Wire protocol (JSON text frames):
 //   client -> relay  { type: 'join',     room, name }
 //   client -> relay  { type: 'presence', name, status }
+//   client -> relay  { type: 'emote',    kind }
 //   relay  -> client { type: 'presence', name, status }   // the partner's
+//   relay  -> client { type: 'emote',    kind }           // the partner's
 //   relay  -> client { type: 'partner-online' }           // partner joined
 //   relay  -> client { type: 'partner-offline' }          // partner left
 //   relay  -> client { type: 'error',    reason }         // e.g. room-full
@@ -86,6 +88,13 @@ wss.on('connection', (ws) => {
       ws.lastPresence = presence
       for (const peer of rooms.get(ws.room) ?? []) {
         if (peer !== ws) send(peer, { type: 'presence', ...presence })
+      }
+      return
+    }
+
+    if (msg.type === 'emote' && ws.room) {
+      for (const peer of rooms.get(ws.room) ?? []) {
+        if (peer !== ws) send(peer, { type: 'emote', kind: String(msg.kind) })
       }
     }
   })

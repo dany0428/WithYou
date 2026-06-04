@@ -3,6 +3,7 @@ import {
   IPC,
   type ActivityStatus,
   type ConnectionState,
+  type EmoteKind,
   type PartnerPresence,
 } from '../../shared/types'
 import type { Transport } from './transport'
@@ -27,6 +28,8 @@ export interface Connection {
   stop(): void
   /** Report our latest detected status; forwarded to the partner. */
   setLocalStatus(status: ActivityStatus): void
+  /** Send an emote to the partner. */
+  sendEmote(kind: EmoteKind): void
   /** Re-send the current partner presence + connection state to the renderer. */
   resend(): void
 }
@@ -56,6 +59,9 @@ export function createConnection(
     sendPartner()
   })
 
+  // An emote from the partner plays on our character.
+  transport.onEmote((kind) => getWindow()?.webContents.send(IPC.EmoteReceived, kind))
+
   return {
     start() {
       transport.start()
@@ -66,6 +72,9 @@ export function createConnection(
     setLocalStatus(status) {
       localStatus = status
       transport.send({ name: SELF_NAME, status })
+    },
+    sendEmote(kind) {
+      transport.sendEmote(kind)
     },
     resend() {
       sendState()

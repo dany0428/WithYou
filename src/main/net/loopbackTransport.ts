@@ -1,4 +1,4 @@
-import type { ConnectionState, PresenceMessage } from '../../shared/types'
+import type { ConnectionState, EmoteKind, PresenceMessage } from '../../shared/types'
 import type { Transport } from './transport'
 
 // ---------------------------------------------------------------------------
@@ -22,6 +22,7 @@ export function createLoopbackTransport(): Transport {
   let messageHandler: ((m: PresenceMessage) => void) | null = null
   let stateHandler: ((s: ConnectionState) => void) | null = null
   let partnerHandler: ((online: boolean) => void) | null = null
+  let emoteHandler: ((kind: EmoteKind) => void) | null = null
   let connected = false
   const timers = new Set<NodeJS.Timeout>()
 
@@ -57,6 +58,12 @@ export function createLoopbackTransport(): Transport {
         ECHO_DELAY_MS,
       )
     },
+    sendEmote(kind) {
+      if (!connected) return
+      // Echo it back as the partner mirroring the emote, so the full send ->
+      // receive pipe can be exercised on one machine.
+      later(() => emoteHandler?.(kind), ECHO_DELAY_MS)
+    },
     onMessage(handler) {
       messageHandler = handler
     },
@@ -65,6 +72,9 @@ export function createLoopbackTransport(): Transport {
     },
     onPartnerPresence(handler) {
       partnerHandler = handler
+    },
+    onEmote(handler) {
+      emoteHandler = handler
     },
   }
 }

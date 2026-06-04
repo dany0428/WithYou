@@ -5,6 +5,7 @@ import {
   type CharacterAction,
   type ConnectionState,
   type CoupleWidgetApi,
+  type EmoteKind,
   type PartnerPresence,
   type UptimeStats,
 } from '../shared/types'
@@ -54,6 +55,14 @@ const api: CoupleWidgetApi = {
   },
   getUptime() {
     return ipcRenderer.invoke(IPC.GetUptime) as Promise<UptimeStats>
+  },
+  sendEmote(kind) {
+    ipcRenderer.send(IPC.SendEmote, kind)
+  },
+  onEmote(handler) {
+    const listener = (_event: Electron.IpcRendererEvent, kind: EmoteKind) => handler(kind)
+    ipcRenderer.on(IPC.EmoteReceived, listener)
+    return () => ipcRenderer.removeListener(IPC.EmoteReceived, listener)
   },
 }
 

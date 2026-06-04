@@ -1,5 +1,5 @@
 import WebSocket from 'ws'
-import type { ConnectionState, PresenceMessage } from '../../shared/types'
+import type { ConnectionState, EmoteKind, PresenceMessage } from '../../shared/types'
 import type { Transport } from './transport'
 
 // ---------------------------------------------------------------------------
@@ -35,6 +35,7 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
   let messageHandler: ((m: PresenceMessage) => void) | null = null
   let stateHandler: ((s: ConnectionState) => void) | null = null
   let partnerHandler: ((online: boolean) => void) | null = null
+  let emoteHandler: ((kind: EmoteKind) => void) | null = null
 
   let ws: WebSocket | null = null
   let stopped = false
@@ -74,7 +75,7 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
     })
 
     socket.on('message', (data) => {
-      let msg: { type?: string; name?: string; status?: string }
+      let msg: { type?: string; name?: string; status?: string; kind?: string }
       try {
         msg = JSON.parse(data.toString())
       } catch {
@@ -84,6 +85,8 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
         partnerHandler?.(true)
       } else if (msg.type === 'partner-offline') {
         partnerHandler?.(false)
+      } else if (msg.type === 'emote' && typeof msg.kind === 'string') {
+        emoteHandler?.(msg.kind as EmoteKind)
       } else if (msg.type === 'presence' && typeof msg.status === 'string') {
         // Presence implies the partner is present, even if we missed the
         // explicit online signal (e.g. we joined after them).
@@ -128,6 +131,11 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
         ws.send(JSON.stringify({ type: 'presence', name: message.name, status: message.status }))
       }
     },
+    sendEmote(kind) {
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'emote', kind }))
+      }
+    },
     onMessage(handler) {
       messageHandler = handler
     },
@@ -136,6 +144,9 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
     },
     onPartnerPresence(handler) {
       partnerHandler = handler
+    },
+    onEmote(handler) {
+      emoteHandler = handler
     },
   }
 }

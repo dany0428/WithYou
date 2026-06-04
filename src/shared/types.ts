@@ -77,8 +77,15 @@ export interface UptimeStats {
 /** Discrete reactions triggered by user interaction (one-shot animations). */
 export type ReactionKind = 'heart' | 'tilde' | 'bounce' | 'spin'
 
+/**
+ * Emotes one partner can send to the other. They travel over the transport and
+ * play as a floating reaction on the *receiving* side's character (and as
+ * immediate local feedback on the sender's). `heart` is the signature one.
+ */
+export type EmoteKind = 'heart' | 'kiss' | 'hug' | 'laugh' | 'sad' | 'wave'
+
 /** Actions emitted from the native right-click context menu (main -> renderer). */
-export type CharacterAction = 'pet' | 'poke' | 'send-heart' | 'settings'
+export type CharacterAction = 'pet' | 'poke' | 'settings'
 
 /** Channel names used for IPC. Centralised to avoid typos across processes. */
 export const IPC = {
@@ -102,6 +109,10 @@ export const IPC = {
   UptimeUpdate: 'uptime:update',
   /** Renderer -> main (invoke): read the current uptime stats. */
   GetUptime: 'uptime:get',
+  /** Renderer -> main: send an emote to the partner. */
+  SendEmote: 'emote:send',
+  /** Main -> renderer: play an emote (incoming from partner, or local feedback). */
+  EmoteReceived: 'emote:received',
 } as const
 
 /**
@@ -130,4 +141,8 @@ export interface CoupleWidgetApi {
   onUptimeUpdate(handler: (stats: UptimeStats) => void): () => void
   /** Read the current uptime stats (for initial render). */
   getUptime(): Promise<UptimeStats>
+  /** Send an emote to the partner (also echoes back as local feedback). */
+  sendEmote(kind: EmoteKind): void
+  /** Subscribe to emotes to play on the character. Returns an unsubscribe fn. */
+  onEmote(handler: (kind: EmoteKind) => void): () => void
 }

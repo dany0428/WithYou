@@ -5,6 +5,7 @@ import type {
   CharacterAction,
   ConnectionState,
   CoupleWidgetApi,
+  EmoteKind,
   UptimeStats,
 } from '../../shared/types'
 
@@ -22,6 +23,7 @@ export function installDemoMock(): void {
   let partnerHandler: ((p: { name: string; status: ActivityStatus }) => void) | null = null
   let connectionHandler: ((s: ConnectionState) => void) | null = null
   let uptimeHandler: ((stats: UptimeStats) => void) | null = null
+  let emoteHandler: ((kind: EmoteKind) => void) | null = null
   let lastPos = { x: window.innerWidth - 90, y: window.innerHeight - 150 }
   // In-memory settings so the settings view can be previewed in a plain browser.
   let demoSettings: AppSettings = { name: '', pairCode: '', relayUrl: '' }
@@ -83,6 +85,18 @@ export function installDemoMock(): void {
     getUptime() {
       return Promise.resolve(uptime)
     },
+    sendEmote(kind) {
+      // Local feedback now, then a simulated partner mirror shortly after —
+      // mirrors the real (feedback + loopback echo) behaviour.
+      emoteHandler?.(kind)
+      window.setTimeout(() => emoteHandler?.(kind), 600)
+    },
+    onEmote(handler) {
+      emoteHandler = handler
+      return () => {
+        if (emoteHandler === handler) emoteHandler = null
+      }
+    },
   }
   window.couple = api
 
@@ -140,14 +154,25 @@ export function installDemoMock(): void {
       boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
       zIndex: '9999',
     })
-    const items: Array<[string, CharacterAction]> = [
-      ['Pet', 'pet'],
-      ['Poke', 'poke'],
-      ['Send Heart', 'send-heart'],
-      ['Settings', 'settings'],
+    const items: Array<{ label: string; run: () => void; separatorBefore?: boolean }> = [
+      { label: 'Pet', run: () => fire('pet') },
+      { label: 'Poke', run: () => fire('poke') },
+      { label: 'Send Heart ❤️', run: () => api.sendEmote('heart') },
+      { label: '😘 Kiss', run: () => api.sendEmote('kiss') },
+      { label: '🤗 Hug', run: () => api.sendEmote('hug') },
+      { label: '😂 Laugh', run: () => api.sendEmote('laugh') },
+      {
+        label: 'Settings',
+        separatorBefore: true,
+        // No tray/window in the browser — preview the settings page in place.
+        run: () => {
+          window.location.hash = 'settings'
+          window.location.reload()
+        },
+      },
     ]
-    items.forEach(([label, action], i) => {
-      if (i === 3) {
+    items.forEach(({ label, run, separatorBefore }) => {
+      if (separatorBefore) {
         const sep = document.createElement('div')
         Object.assign(sep.style, {
           height: '1px',
@@ -168,13 +193,7 @@ export function installDemoMock(): void {
       item.onclick = () => {
         menu.remove()
         document.removeEventListener('mousedown', close)
-        if (action === 'settings') {
-          // No tray/window in the browser — preview the settings page in place.
-          window.location.hash = 'settings'
-          window.location.reload()
-        } else {
-          fire(action)
-        }
+        run()
       }
       menu.appendChild(item)
     })
@@ -221,7 +240,9 @@ export function installDemoMock(): void {
     <div style="font-weight:600;margin-bottom:4px">Animation states:</div>
     <div id="demo-states" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
     <div style="font-weight:600;margin-bottom:4px">Menu actions:</div>
-    <div id="demo-actions" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    <div id="demo-actions" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <div style="font-weight:600;margin-bottom:4px">Send emote:</div>
+    <div id="demo-emotes" style="display:flex;flex-wrap:wrap;gap:6px"></div>
   `
   document.body.appendChild(panel)
 
@@ -256,7 +277,12 @@ export function installDemoMock(): void {
   states.forEach((s) => statesEl.appendChild(mkBtn(s, () => setState(s))))
 
   const actionsEl = panel.querySelector('#demo-actions')!
-  ;(['pet', 'poke', 'send-heart'] as CharacterAction[]).forEach((a) =>
+  ;(['pet', 'poke'] as CharacterAction[]).forEach((a) =>
     actionsEl.appendChild(mkBtn(a, () => fire(a))),
+  )
+
+  const emotesEl = panel.querySelector('#demo-emotes')!
+  ;(['heart', 'kiss', 'hug', 'laugh', 'sad', 'wave'] as EmoteKind[]).forEach((k) =>
+    emotesEl.appendChild(mkBtn(k, () => api.sendEmote(k))),
   )
 }

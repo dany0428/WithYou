@@ -1,4 +1,4 @@
-import type { ConnectionState, PresenceMessage } from '../../shared/types'
+import type { ConnectionState, EmoteKind, PresenceMessage } from '../../shared/types'
 
 // ---------------------------------------------------------------------------
 // Transport abstraction (Stage 3).
@@ -16,6 +16,8 @@ export interface Transport {
   stop(): void
   /** Send our presence to the partner. May be a no-op while disconnected. */
   send(message: PresenceMessage): void
+  /** Send a one-shot emote to the partner. No-op while disconnected. */
+  sendEmote(kind: EmoteKind): void
   /** Register the handler for presence arriving from the partner. */
   onMessage(handler: (message: PresenceMessage) => void): void
   /** Register the handler for connection-state changes. */
@@ -25,4 +27,6 @@ export interface Transport {
    * joining or leaving the shared room). Drives the "online together" timer.
    */
   onPartnerPresence(handler: (online: boolean) => void): void
+  /** Register the handler for an emote arriving from the partner. */
+  onEmote(handler: (kind: EmoteKind) => void): void
 }

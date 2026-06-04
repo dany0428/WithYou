@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, Tray, screen, nativeImage } from 'electron'
 import path from 'node:path'
+import { IPC } from '../shared/types'
 import { registerIpc } from './ipc'
 import { startActivityMonitor, type ActivityMonitor } from './activity'
 import { createConnection, type Connection } from './net/connection'
@@ -216,6 +217,12 @@ app.whenReady().then(() => {
     openSettings: openSettingsWindow,
     closeSettings: () => settingsWindow?.close(),
     onSettingsChanged: rebuildConnection,
+    sendEmote: (kind) => {
+      connection?.sendEmote(kind) // to the partner
+      // Immediate local feedback so sending feels responsive (the partner's
+      // mirrored emote, if any, arrives separately over the transport).
+      mainWindow?.webContents.send(IPC.EmoteReceived, kind)
+    },
   })
 
   app.on('activate', () => {

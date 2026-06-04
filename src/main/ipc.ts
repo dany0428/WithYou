@@ -1,6 +1,6 @@
 import { BrowserWindow, Menu, ipcMain } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
-import { IPC, type ActivityStatus, type AppSettings, type CharacterAction } from '../shared/types'
+import { IPC, type ActivityStatus, type AppSettings, type CharacterAction, type EmoteKind } from '../shared/types'
 import type { ActivityMonitor } from './activity'
 import { loadSettings, saveSettings } from './settings'
 import type { UptimeTracker } from './uptime'
@@ -13,7 +13,19 @@ export interface IpcHooks {
   closeSettings: () => void
   /** Rebuild the partner connection after settings change. */
   onSettingsChanged: () => void
+  /** Send an emote to the partner (and echo it locally for feedback). */
+  sendEmote: (kind: EmoteKind) => void
 }
+
+/** Emotes offered in the right-click "Send emote" submenu, in display order. */
+const EMOTE_ITEMS: ReadonlyArray<{ label: string; kind: EmoteKind }> = [
+  { label: '❤️ Heart', kind: 'heart' },
+  { label: '😘 Kiss', kind: 'kiss' },
+  { label: '🤗 Hug', kind: 'hug' },
+  { label: '😂 Laugh', kind: 'laugh' },
+  { label: '🥺 Miss you', kind: 'sad' },
+  { label: '👋 Wave', kind: 'wave' },
+]
 
 /** Selectable statuses for the manual-override submenu, in display order. */
 const STATUS_ITEMS: ReadonlyArray<{ label: string; status: ActivityStatus }> = [
@@ -51,6 +63,9 @@ export function registerIpc(
 
   // Initial uptime snapshot for a freshly-loaded window (live updates are pushed).
   ipcMain.handle(IPC.GetUptime, () => getUptime()?.current() ?? null)
+
+  // Renderer-initiated emote (e.g. a future in-UI button) -> partner + feedback.
+  ipcMain.on(IPC.SendEmote, (_event, kind: EmoteKind) => hooks.sendEmote(kind))
 
   // Renderer toggles click-through as the cursor enters/leaves the character.
   // `forward: true` keeps move events flowing so the renderer can re-detect a
@@ -90,10 +105,16 @@ export function registerIpc(
       ),
     ]
 
+    const emoteSubmenu: MenuItemConstructorOptions[] = EMOTE_ITEMS.map((it) => ({
+      label: it.label,
+      click: () => hooks.sendEmote(it.kind),
+    }))
+
     const menu = Menu.buildFromTemplate([
       { label: 'Pet', click: () => send('pet') },
       { label: 'Poke', click: () => send('poke') },
-      { label: 'Send Heart', click: () => send('send-heart') },
+      { label: 'Send Heart ❤️', click: () => hooks.sendEmote('heart') },
+      { label: 'Send emote', submenu: emoteSubmenu },
       { type: 'separator' },
       { label: 'Status', submenu: statusSubmenu },
       { label: 'Settings…', click: () => hooks.openSettings() },

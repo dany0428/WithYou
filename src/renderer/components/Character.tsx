@@ -11,6 +11,7 @@ import type {
   ActivityStatus,
   AnimationState,
   ConnectionState,
+  EmoteKind,
   ReactionKind,
 } from '../../shared/types'
 // The cat animation, authored in Rive. `?url` makes Vite emit it as an asset and
@@ -54,11 +55,22 @@ const REACTION_SYMBOL: Record<ReactionKind, string> = {
   spin: '~',
 }
 
+/** Emoji shown floating up when an emote is sent/received. */
+const EMOTE_EMOJI: Record<EmoteKind, string> = {
+  heart: '❤️',
+  kiss: '😘',
+  hug: '🤗',
+  laugh: '😂',
+  sad: '🥺',
+  wave: '👋',
+}
+
 /** Imperative handle so the parent can trigger reactions from menu/tray actions. */
 export interface CharacterHandle {
   pet(): void
   poke(): void
-  sendHeart(): void
+  /** Play an emote (sent to / received from the partner). */
+  playEmote(kind: EmoteKind): void
 }
 
 interface CharacterProps {
@@ -143,14 +155,16 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
     return () => window.removeEventListener('mousemove', onMove)
   }, [rive])
 
-  function spawnFloat(kind: ReactionKind) {
+  function spawnSymbol(symbol: string) {
     const id = floatId++
-    setFloats((prev) => [...prev, { id, symbol: REACTION_SYMBOL[kind] }])
+    setFloats((prev) => [...prev, { id, symbol }])
     // Clean up after the rise-and-fade animation finishes.
     window.setTimeout(() => {
       setFloats((prev) => prev.filter((f) => f.id !== id))
     }, 1200)
   }
+
+  const spawnFloat = (kind: ReactionKind) => spawnSymbol(REACTION_SYMBOL[kind])
 
   // Restart a one-shot reaction animation WITHOUT remounting the Rive canvas:
   // briefly clear the class, then re-apply on the next frame so the CSS
@@ -169,7 +183,10 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   useImperativeHandle(ref, () => ({
     pet: () => react('bounce'),
     poke: () => react('spin'),
-    sendHeart: () => spawnFloat('heart'),
+    playEmote: (kind: EmoteKind) => {
+      spawnSymbol(EMOTE_EMOJI[kind])
+      playReaction('bounce')
+    },
   }))
 
   // Distinguish single vs double click without firing the single-click action

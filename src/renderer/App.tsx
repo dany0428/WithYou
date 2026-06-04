@@ -40,17 +40,20 @@ export default function App() {
         case 'poke':
           characterRef.current?.poke()
           break
-        case 'send-heart':
-          characterRef.current?.sendHeart()
-          break
         case 'settings':
-          // Placeholder until the settings window exists.
-          console.log('[CoupleWidget] Settings requested')
+          // Settings now opens a dedicated window from the main process; nothing
+          // to do in the widget renderer.
           break
       }
     })
     return unsubscribe
   }, [])
+
+  // Emotes (from the partner, or local feedback on send) play on the character.
+  useEffect(
+    () => window.couple.onEmote((kind) => characterRef.current?.playEmote(kind)),
+    [],
+  )
 
   // Partner presence + connection state pushed from the main process.
   useEffect(() => window.couple.onPartnerUpdate(setPartner), [])
