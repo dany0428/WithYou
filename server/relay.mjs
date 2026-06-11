@@ -24,6 +24,7 @@
 // ---------------------------------------------------------------------------
 
 import { WebSocketServer } from 'ws'
+import { createServer } from 'http'
 
 const PORT = Number(process.env.PORT) || 8080
 
@@ -39,7 +40,15 @@ const send = (ws, obj) => {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj))
 }
 
-const wss = new WebSocketServer({ port: PORT })
+// A bare HTTP server so platform health checks (Render, Railway, …) get a clean
+// 200 on plain GET requests. The WebSocket server piggybacks on it, handling the
+// `Upgrade` handshake on the same port — so couples connect and hosts stay happy.
+const httpServer = createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' })
+  res.end('CoupleWidget relay is up.\n')
+})
+
+const wss = new WebSocketServer({ server: httpServer })
 
 wss.on('connection', (ws) => {
   ws.isAlive = true
@@ -124,4 +133,6 @@ const heartbeat = setInterval(() => {
 }, HEARTBEAT_MS)
 wss.on('close', () => clearInterval(heartbeat))
 
-console.log(`[relay] CoupleWidget relay listening on :${PORT}`)
+httpServer.listen(PORT, () => {
+  console.log(`[relay] CoupleWidget relay listening on :${PORT}`)
+})
