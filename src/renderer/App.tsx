@@ -28,21 +28,21 @@ export default function App() {
     window.couple.setMouseThrough(!interactive)
   }
 
-  // React to context-menu / tray actions coming from the main process.
+  // Context-menu / tray actions. Pet and Poke are gestures aimed at the partner,
+  // so they travel over the transport (and echo back locally) just like emotes —
+  // the reaction then shows on both screens.
   useEffect(() => {
     const unsubscribe = window.couple.onCharacterAction((action: CharacterAction) => {
       switch (action) {
         case 'pet':
-          setState('happy')
-          characterRef.current?.pet()
-          window.setTimeout(() => setState('idle'), 1500)
+          window.couple.sendEmote('hug')
           break
         case 'poke':
-          characterRef.current?.poke()
+          window.couple.sendEmote('poke')
           break
         case 'settings':
-          // Settings now opens a dedicated window from the main process; nothing
-          // to do in the widget renderer.
+          // Settings opens a dedicated window from the main process; nothing to
+          // do in the widget renderer.
           break
       }
     })

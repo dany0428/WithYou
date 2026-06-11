@@ -216,7 +216,13 @@ app.whenReady().then(() => {
   registerIpc(() => mainWindow, () => activityMonitor, () => uptime, {
     openSettings: openSettingsWindow,
     closeSettings: () => settingsWindow?.close(),
-    onSettingsChanged: rebuildConnection,
+    onSettingsChanged: (linkChanged) => {
+      // Rebuild only when the relay link actually changed; for a name-only edit
+      // keep the live connection and just re-send our presence (with the new
+      // name) so the partner updates without the link flapping offline.
+      if (linkChanged) rebuildConnection()
+      else activityMonitor?.resend()
+    },
     sendEmote: (kind) => {
       connection?.sendEmote(kind) // to the partner
       // Immediate local feedback so sending feels responsive (the partner's

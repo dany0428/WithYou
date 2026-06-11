@@ -82,7 +82,7 @@ export type ReactionKind = 'heart' | 'tilde' | 'bounce' | 'spin'
  * play as a floating reaction on the *receiving* side's character (and as
  * immediate local feedback on the sender's). `heart` is the signature one.
  */
-export type EmoteKind = 'heart' | 'kiss' | 'hug' | 'laugh' | 'sad' | 'wave'
+export type EmoteKind = 'heart' | 'kiss' | 'hug' | 'laugh' | 'sad' | 'wave' | 'poke'
 
 /** Actions emitted from the native right-click context menu (main -> renderer). */
 export type CharacterAction = 'pet' | 'poke' | 'settings'

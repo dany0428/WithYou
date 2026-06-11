@@ -12,7 +12,6 @@ import type {
   AnimationState,
   ConnectionState,
   EmoteKind,
-  ReactionKind,
 } from '../../shared/types'
 // The cat animation, authored in Rive. `?url` makes Vite emit it as an asset and
 // hand us back its (hashed, production-safe) URL.
@@ -48,13 +47,6 @@ const ACTIVITY_LABEL: Record<ActivityStatus, string> = {
   afk: '💤 Away',
 }
 
-const REACTION_SYMBOL: Record<ReactionKind, string> = {
-  heart: '♥',
-  tilde: '~',
-  bounce: '♥',
-  spin: '~',
-}
-
 /** Emoji shown floating up when an emote is sent/received. */
 const EMOTE_EMOJI: Record<EmoteKind, string> = {
   heart: '❤️',
@@ -63,12 +55,11 @@ const EMOTE_EMOJI: Record<EmoteKind, string> = {
   laugh: '😂',
   sad: '🥺',
   wave: '👋',
+  poke: '👉',
 }
 
-/** Imperative handle so the parent can trigger reactions from menu/tray actions. */
+/** Imperative handle so the parent can play an emote on the character. */
 export interface CharacterHandle {
-  pet(): void
-  poke(): void
   /** Play an emote (sent to / received from the partner). */
   playEmote(kind: EmoteKind): void
 }
@@ -167,8 +158,6 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
     }, 1200)
   }
 
-  const spawnFloat = (kind: ReactionKind) => spawnSymbol(REACTION_SYMBOL[kind])
-
   // Restart a one-shot reaction animation WITHOUT remounting the Rive canvas:
   // briefly clear the class, then re-apply on the next frame so the CSS
   // animation replays. (Remounting via `key` was destroying the canvas.)
@@ -177,29 +166,23 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
     requestAnimationFrame(() => setReaction(next))
   }
 
-  function react(kind: ReactionKind) {
-    playReaction(kind === 'spin' || kind === 'tilde' ? 'spin' : 'bounce')
-    spawnFloat(kind)
-  }
-
-  // Exposed to the parent (context-menu / tray driven).
+  // Exposed to the parent so incoming/echoed emotes play on the character.
   useImperativeHandle(ref, () => ({
-    pet: () => react('bounce'),
-    poke: () => react('spin'),
     playEmote: (kind: EmoteKind) => {
       spawnSymbol(EMOTE_EMOJI[kind])
       playReaction('bounce')
     },
   }))
 
-  // Distinguish single vs double click without firing the single-click action
-  // twice on a double click.
+  // Clicking the partner's character pokes them; a double-click sends a heart.
+  // Both travel to the partner over the transport and echo back as local
+  // feedback, so the reaction shows on *both* screens. The single-click timer
+  // keeps a double-click from also firing the single-click poke.
   function handleClick() {
     if (clickTimer.current !== null) return
     clickTimer.current = window.setTimeout(() => {
       clickTimer.current = null
-      playReaction('bounce')
-      spawnFloat('heart')
+      window.couple.sendEmote('poke')
     }, 220)
   }
 
@@ -208,8 +191,7 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
       window.clearTimeout(clickTimer.current)
       clickTimer.current = null
     }
-    playReaction('spin')
-    spawnFloat('tilde')
+    window.couple.sendEmote('heart')
   }
 
   function handleContextMenu(e: MouseEvent) {

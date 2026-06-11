@@ -11,8 +11,12 @@ export interface IpcHooks {
   openSettings: () => void
   /** Close the settings window. */
   closeSettings: () => void
-  /** Rebuild the partner connection after settings change. */
-  onSettingsChanged: () => void
+  /**
+   * React to saved settings. `linkChanged` is true only when the relay URL or
+   * pairing code changed (so the transport must be rebuilt); on a name-only
+   * change the caller can keep the live link and just refresh the partner.
+   */
+  onSettingsChanged: (linkChanged: boolean) => void
   /** Send an emote to the partner (and echo it locally for feedback). */
   sendEmote: (kind: EmoteKind) => void
 }
@@ -55,8 +59,13 @@ export function registerIpc(
   // new relay URL / pairing code takes effect immediately.
   ipcMain.handle(IPC.GetSettings, () => loadSettings())
   ipcMain.handle(IPC.SaveSettings, (_event, settings: AppSettings) => {
+    const before = loadSettings()
     const saved = saveSettings(settings)
-    hooks.onSettingsChanged()
+    // Only the relay URL / pairing code define the link; if neither changed we
+    // keep the existing connection alive instead of flapping it offline.
+    const linkChanged =
+      before.relayUrl !== saved.relayUrl || before.pairCode !== saved.pairCode
+    hooks.onSettingsChanged(linkChanged)
     return saved
   })
   ipcMain.on(IPC.CloseSettings, () => hooks.closeSettings())
@@ -111,8 +120,8 @@ export function registerIpc(
     }))
 
     const menu = Menu.buildFromTemplate([
-      { label: 'Pet', click: () => send('pet') },
-      { label: 'Poke', click: () => send('poke') },
+      { label: 'Pet 🤗', click: () => send('pet') },
+      { label: 'Poke 👉', click: () => send('poke') },
       { label: 'Send Heart ❤️', click: () => hooks.sendEmote('heart') },
       { label: 'Send emote', submenu: emoteSubmenu },
       { type: 'separator' },
