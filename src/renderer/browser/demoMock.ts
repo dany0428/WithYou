@@ -97,6 +97,12 @@ export function installDemoMock(): void {
         if (emoteHandler === handler) emoteHandler = null
       }
     },
+    startDrag() {
+      /* no-op in the browser — there's no OS window to move */
+    },
+    endDrag() {
+      /* no-op in the browser */
+    },
   }
   window.couple = api
 

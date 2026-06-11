@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -82,6 +83,9 @@ interface FloatingText {
 
 type Reaction = 'none' | 'bounce' | 'spin'
 
+/** Pixels the cursor must travel before a press counts as a drag (not a click). */
+const DRAG_THRESHOLD = 4
+
 let floatId = 0
 
 const Character = forwardRef<CharacterHandle, CharacterProps>(function Character(
@@ -92,6 +96,10 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   const [reaction, setReaction] = useState<Reaction>('none')
   const clickTimer = useRef<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Drag bookkeeping: where the press started (screen px) and whether it grew
+  // into a real drag, so we can swallow the click-to-poke that follows a move.
+  const dragOrigin = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  const suppressClick = useRef(false)
 
   // Load the file; we start playback ourselves below once we know whether it has
   // a state machine. The canvas is transparent, so it composites cleanly.
@@ -174,11 +182,55 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
     },
   }))
 
+  // --- Drag the whole widget by grabbing the character. The main process moves
+  // the window to follow the cursor; here we only decide press-vs-drag so a real
+  // drag doesn't also fire the click-to-poke. ---
+  const onDragMove = useCallback((e: globalThis.MouseEvent) => {
+    const d = dragOrigin.current
+    if (!d || d.moved) return
+    if (Math.hypot(e.screenX - d.x, e.screenY - d.y) > DRAG_THRESHOLD) d.moved = true
+  }, [])
+
+  const onDragEnd = useCallback(() => {
+    const d = dragOrigin.current
+    dragOrigin.current = null
+    window.removeEventListener('mousemove', onDragMove)
+    window.removeEventListener('mouseup', onDragEnd)
+    window.couple.endDrag()
+    // If it moved, swallow the click that the browser fires right after mouseup.
+    if (d?.moved) {
+      suppressClick.current = true
+      window.setTimeout(() => (suppressClick.current = false), 0)
+    }
+  }, [onDragMove])
+
+  function handleMouseDown(e: MouseEvent) {
+    if (e.button !== 0) return // left button only; right-click opens the menu
+    dragOrigin.current = { x: e.screenX, y: e.screenY, moved: false }
+    window.couple.startDrag()
+    window.addEventListener('mousemove', onDragMove)
+    window.addEventListener('mouseup', onDragEnd)
+  }
+
+  // Clean up stray listeners if we unmount mid-press.
+  useEffect(
+    () => () => {
+      window.removeEventListener('mousemove', onDragMove)
+      window.removeEventListener('mouseup', onDragEnd)
+    },
+    [onDragMove, onDragEnd],
+  )
+
   // Clicking the partner's character pokes them; a double-click sends a heart.
   // Both travel to the partner over the transport and echo back as local
   // feedback, so the reaction shows on *both* screens. The single-click timer
   // keeps a double-click from also firing the single-click poke.
   function handleClick() {
+    // A press that turned into a drag isn't a poke.
+    if (suppressClick.current) {
+      suppressClick.current = false
+      return
+    }
     if (clickTimer.current !== null) return
     clickTimer.current = window.setTimeout(() => {
       clickTimer.current = null
@@ -214,7 +266,8 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
       {/* Character + floating reactions */}
       <div
         ref={containerRef}
-        className="group relative h-[220px] w-[220px] cursor-pointer"
+        className="group relative h-[220px] w-[220px] cursor-grab active:cursor-grabbing"
+        onMouseDown={handleMouseDown}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}

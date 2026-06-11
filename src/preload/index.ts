@@ -64,6 +64,12 @@ const api: CoupleWidgetApi = {
     ipcRenderer.on(IPC.EmoteReceived, listener)
     return () => ipcRenderer.removeListener(IPC.EmoteReceived, listener)
   },
+  startDrag() {
+    ipcRenderer.send(IPC.WidgetStartDrag)
+  },
+  endDrag() {
+    ipcRenderer.send(IPC.WidgetEndDrag)
+  },
 }
 
 contextBridge.exposeInMainWorld('couple', api)

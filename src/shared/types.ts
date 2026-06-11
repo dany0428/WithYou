@@ -113,6 +113,10 @@ export const IPC = {
   SendEmote: 'emote:send',
   /** Main -> renderer: play an emote (incoming from partner, or local feedback). */
   EmoteReceived: 'emote:received',
+  /** Renderer -> main: begin dragging the widget (follows the cursor). */
+  WidgetStartDrag: 'widget:start-drag',
+  /** Renderer -> main: stop dragging the widget (persists its new position). */
+  WidgetEndDrag: 'widget:end-drag',
 } as const
 
 /**
@@ -145,4 +149,8 @@ export interface CoupleWidgetApi {
   sendEmote(kind: EmoteKind): void
   /** Subscribe to emotes to play on the character. Returns an unsubscribe fn. */
   onEmote(handler: (kind: EmoteKind) => void): () => void
+  /** Begin dragging the widget; it follows the cursor until `endDrag`. */
+  startDrag(): void
+  /** Stop dragging the widget and persist its new position. */
+  endDrag(): void
 }

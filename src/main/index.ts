@@ -1,6 +1,7 @@
-import { app, BrowserWindow, Menu, Tray, screen, nativeImage } from 'electron'
+import { app, BrowserWindow, Menu, Tray, screen, nativeImage, ipcMain } from 'electron'
 import path from 'node:path'
 import { IPC } from '../shared/types'
+import { loadWidgetPosition, saveWidgetPosition } from './windowState'
 import { registerIpc } from './ipc'
 import { startActivityMonitor, type ActivityMonitor } from './activity'
 import { createConnection, type Connection } from './net/connection'
@@ -37,12 +38,37 @@ let activityMonitor: ActivityMonitor | null = null
 let connection: Connection | null = null
 let uptime: UptimeTracker | null = null
 
+// Once the user drags the widget we stop auto-anchoring it to the corner and
+// honour their chosen spot (only nudging it back on-screen if a display goes
+// away). Drag state lives here so the cursor-follow loop and the click-through
+// guard can coordinate.
+let userPositioned = false
+let dragging = false
+let dragTimer: NodeJS.Timeout | null = null
+let dragGrab = { dx: 0, dy: 0 }
+let dragStart = { x: 0, y: 0 }
+
 /** Anchor the widget to the bottom-right of the *primary* display's work area. */
 function positionWindow(win: BrowserWindow): void {
   const { workArea } = screen.getPrimaryDisplay()
   const x = workArea.x + workArea.width - WIDGET_WIDTH
   const y = workArea.y + workArea.height - WIDGET_HEIGHT
   win.setBounds({ x, y, width: WIDGET_WIDTH, height: WIDGET_HEIGHT })
+}
+
+/** Pull the widget back into the nearest display's work area if it's hanging
+ *  off-screen (e.g. after a monitor was unplugged), keeping the user's spot. */
+function ensureOnScreen(win: BrowserWindow): void {
+  const [x, y] = win.getPosition()
+  const { workArea } = screen.getDisplayMatching({
+    x,
+    y,
+    width: WIDGET_WIDTH,
+    height: WIDGET_HEIGHT,
+  })
+  const clampedX = Math.min(Math.max(x, workArea.x), workArea.x + workArea.width - WIDGET_WIDTH)
+  const clampedY = Math.min(Math.max(y, workArea.y), workArea.y + workArea.height - WIDGET_HEIGHT)
+  if (clampedX !== x || clampedY !== y) win.setPosition(Math.round(clampedX), Math.round(clampedY))
 }
 
 function createWindow(): void {
@@ -71,15 +97,29 @@ function createWindow(): void {
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
-  positionWindow(mainWindow)
+  // Restore the user's dragged position if they have one, else anchor to the
+  // bottom-right corner. A stale saved spot is clamped back on-screen.
+  const saved = loadWidgetPosition()
+  if (saved) {
+    userPositioned = true
+    mainWindow.setBounds({ x: saved.x, y: saved.y, width: WIDGET_WIDTH, height: WIDGET_HEIGHT })
+    ensureOnScreen(mainWindow)
+  } else {
+    positionWindow(mainWindow)
+  }
 
   // Start fully click-through. `forward: true` (Windows/macOS) keeps forwarding
   // move events to the renderer so it can detect when the cursor is over the
   // character and ask the main process to re-enable interaction.
   mainWindow.setIgnoreMouseEvents(true, { forward: true })
 
-  // Re-anchor when monitors change (resolution, scaling, plug/unplug).
-  const reposition = () => mainWindow && positionWindow(mainWindow)
+  // On a monitor change keep the user's chosen spot (just nudge it on-screen);
+  // otherwise re-anchor to the corner.
+  const reposition = () => {
+    if (!mainWindow) return
+    if (userPositioned) ensureOnScreen(mainWindow)
+    else positionWindow(mainWindow)
+  }
   screen.on('display-metrics-changed', reposition)
   screen.on('display-added', reposition)
   screen.on('display-removed', reposition)
@@ -203,6 +243,42 @@ function openSettingsWindow(): void {
   }
 }
 
+/** Cursor-follow drag for the frameless widget: while dragging we keep the
+ *  window interactive and reposition it every frame so the grab point stays
+ *  under the cursor, then persist where it lands. */
+function registerDragIpc(): void {
+  ipcMain.on(IPC.WidgetStartDrag, () => {
+    if (!mainWindow) return
+    const cursor = screen.getCursorScreenPoint()
+    const [wx, wy] = mainWindow.getPosition()
+    dragGrab = { dx: cursor.x - wx, dy: cursor.y - wy }
+    dragStart = { x: wx, y: wy }
+    dragging = true
+    mainWindow.setIgnoreMouseEvents(false) // stay interactive for the whole drag
+    if (dragTimer) clearInterval(dragTimer)
+    dragTimer = setInterval(() => {
+      if (!mainWindow) return
+      const p = screen.getCursorScreenPoint()
+      mainWindow.setPosition(Math.round(p.x - dragGrab.dx), Math.round(p.y - dragGrab.dy))
+    }, 16)
+  })
+
+  ipcMain.on(IPC.WidgetEndDrag, () => {
+    dragging = false
+    if (dragTimer) {
+      clearInterval(dragTimer)
+      dragTimer = null
+    }
+    if (!mainWindow) return
+    const [x, y] = mainWindow.getPosition()
+    // Only count it as a move (and remember it) if the window actually shifted.
+    if (x !== dragStart.x || y !== dragStart.y) {
+      userPositioned = true
+      saveWidgetPosition({ x, y })
+    }
+  })
+}
+
 app.whenReady().then(() => {
   createWindow()
   createTray()
@@ -229,7 +305,12 @@ app.whenReady().then(() => {
       // mirrored emote, if any, arrives separately over the transport).
       mainWindow?.webContents.send(IPC.EmoteReceived, kind)
     },
+    hideWidget: () => mainWindow?.hide(),
+    quitApp: () => app.quit(),
+    isDragging: () => dragging,
   })
+
+  registerDragIpc()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

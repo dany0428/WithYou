@@ -19,6 +19,12 @@ export interface IpcHooks {
   onSettingsChanged: (linkChanged: boolean) => void
   /** Send an emote to the partner (and echo it locally for feedback). */
   sendEmote: (kind: EmoteKind) => void
+  /** Hide the widget (it can be brought back from the tray). */
+  hideWidget: () => void
+  /** Quit the whole app. */
+  quitApp: () => void
+  /** Whether the widget is mid-drag (so we don't flip it click-through). */
+  isDragging: () => boolean
 }
 
 /** Emotes offered in the right-click "Send emote" submenu, in display order. */
@@ -80,6 +86,9 @@ export function registerIpc(
   // `forward: true` keeps move events flowing so the renderer can re-detect a
   // leave even while the window is ignoring clicks.
   ipcMain.on(IPC.SetMouseThrough, (_event, through: boolean) => {
+    // Never go click-through mid-drag, or the window would stop receiving the
+    // mouseup that ends the drag and get stuck following the cursor.
+    if (through && hooks.isDragging()) return
     const win = getWindow()
     win?.setIgnoreMouseEvents(through, { forward: true })
   })
@@ -127,6 +136,9 @@ export function registerIpc(
       { type: 'separator' },
       { label: 'Status', submenu: statusSubmenu },
       { label: 'Settings…', click: () => hooks.openSettings() },
+      { type: 'separator' },
+      { label: 'Hide widget', click: () => hooks.hideWidget() },
+      { label: 'Quit CoupleWidget', click: () => hooks.quitApp() },
     ])
 
     menu.popup({ window: win })
