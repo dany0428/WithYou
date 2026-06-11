@@ -49,7 +49,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-[#11131a] px-7 py-6 text-slate-100">
+    <div className="flex h-full w-full flex-col overflow-y-auto bg-[#11131a] px-7 py-6 text-slate-100">
       <h1 className="text-lg font-semibold">Settings</h1>
       <p className="mt-1 text-xs text-slate-400">
         Connect to your partner, or leave the relay fields empty to run offline.
