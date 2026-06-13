@@ -19,6 +19,8 @@ export interface IpcHooks {
   onSettingsChanged: (linkChanged: boolean) => void
   /** Send an emote to the partner (and echo it locally for feedback). */
   sendEmote: (kind: EmoteKind) => void
+  /** Send a mini-chat message to the partner. */
+  sendChat: (text: string) => void
   /** Hide the widget (it can be brought back from the tray). */
   hideWidget: () => void
   /** Quit the whole app. */
@@ -82,6 +84,9 @@ export function registerIpc(
   // Renderer-initiated emote (e.g. a future in-UI button) -> partner + feedback.
   ipcMain.on(IPC.SendEmote, (_event, kind: EmoteKind) => hooks.sendEmote(kind))
 
+  // Mini-chat message composed in the widget -> partner.
+  ipcMain.on(IPC.SendChat, (_event, text: string) => hooks.sendChat(text))
+
   // Renderer toggles click-through as the cursor enters/leaves the character.
   // `forward: true` keeps move events flowing so the renderer can re-detect a
   // leave even while the window is ignoring clicks.
@@ -133,6 +138,7 @@ export function registerIpc(
       { label: 'Poke 👉', click: () => send('poke') },
       { label: 'Send Heart ❤️', click: () => hooks.sendEmote('heart') },
       { label: 'Send emote', submenu: emoteSubmenu },
+      { label: 'Send message…', click: () => send('message') },
       { type: 'separator' },
       { label: 'Status', submenu: statusSubmenu },
       { label: 'Settings…', click: () => hooks.openSettings() },

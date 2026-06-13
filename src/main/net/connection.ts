@@ -26,6 +26,8 @@ export interface Connection {
   setLocalStatus(status: ActivityStatus): void
   /** Send an emote to the partner. */
   sendEmote(kind: EmoteKind): void
+  /** Send a mini-chat message to the partner. */
+  sendChat(text: string): void
   /** Re-send the current partner presence + connection state to the renderer. */
   resend(): void
 }
@@ -62,6 +64,9 @@ export function createConnection(
   // An emote from the partner plays on our character.
   transport.onEmote((kind) => getWindow()?.webContents.send(IPC.EmoteReceived, kind))
 
+  // A chat message from the partner pops a speech bubble over our character.
+  transport.onChat((text) => getWindow()?.webContents.send(IPC.ChatReceived, text))
+
   return {
     start() {
       transport.start()
@@ -75,6 +80,9 @@ export function createConnection(
     },
     sendEmote(kind) {
       transport.sendEmote(kind)
+    },
+    sendChat(text) {
+      transport.sendChat(text)
     },
     resend() {
       sendState()

@@ -24,6 +24,7 @@ export function installDemoMock(): void {
   let connectionHandler: ((s: ConnectionState) => void) | null = null
   let uptimeHandler: ((stats: UptimeStats) => void) | null = null
   let emoteHandler: ((kind: EmoteKind) => void) | null = null
+  let chatHandler: ((text: string) => void) | null = null
   let lastPos = { x: window.innerWidth - 90, y: window.innerHeight - 150 }
   // In-memory settings so the settings view can be previewed in a plain browser.
   let demoSettings: AppSettings = { name: '', pairCode: '', relayUrl: '' }
@@ -95,6 +96,17 @@ export function installDemoMock(): void {
       emoteHandler = handler
       return () => {
         if (emoteHandler === handler) emoteHandler = null
+      }
+    },
+    sendChat(text) {
+      // Simulate the partner replying with the same text shortly after, so the
+      // bubble path can be exercised in a plain browser (mirrors loopback echo).
+      window.setTimeout(() => chatHandler?.(text), 600)
+    },
+    onChat(handler) {
+      chatHandler = handler
+      return () => {
+        if (chatHandler === handler) chatHandler = null
       }
     },
     startDrag() {
@@ -248,7 +260,9 @@ export function installDemoMock(): void {
     <div style="font-weight:600;margin-bottom:4px">Menu actions:</div>
     <div id="demo-actions" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
     <div style="font-weight:600;margin-bottom:4px">Send emote:</div>
-    <div id="demo-emotes" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    <div id="demo-emotes" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <div style="font-weight:600;margin-bottom:4px">Mini chat:</div>
+    <div id="demo-chat" style="display:flex;flex-wrap:wrap;gap:6px"></div>
   `
   document.body.appendChild(panel)
 
@@ -291,4 +305,8 @@ export function installDemoMock(): void {
   ;(['heart', 'kiss', 'hug', 'laugh', 'sad', 'wave'] as EmoteKind[]).forEach((k) =>
     emotesEl.appendChild(mkBtn(k, () => api.sendEmote(k))),
   )
+
+  const chatEl = panel.querySelector('#demo-chat')!
+  chatEl.appendChild(mkBtn('Open composer', () => fire('message')))
+  chatEl.appendChild(mkBtn('Partner says hi', () => chatHandler?.('hi there 💕')))
 }

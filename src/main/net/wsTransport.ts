@@ -36,6 +36,7 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
   let stateHandler: ((s: ConnectionState) => void) | null = null
   let partnerHandler: ((online: boolean) => void) | null = null
   let emoteHandler: ((kind: EmoteKind) => void) | null = null
+  let chatHandler: ((text: string) => void) | null = null
 
   let ws: WebSocket | null = null
   let stopped = false
@@ -75,7 +76,7 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
     })
 
     socket.on('message', (data) => {
-      let msg: { type?: string; name?: string; status?: string; kind?: string }
+      let msg: { type?: string; name?: string; status?: string; kind?: string; text?: string }
       try {
         msg = JSON.parse(data.toString())
       } catch {
@@ -87,6 +88,8 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
         partnerHandler?.(false)
       } else if (msg.type === 'emote' && typeof msg.kind === 'string') {
         emoteHandler?.(msg.kind as EmoteKind)
+      } else if (msg.type === 'chat' && typeof msg.text === 'string') {
+        chatHandler?.(msg.text)
       } else if (msg.type === 'presence' && typeof msg.status === 'string') {
         // Presence implies the partner is present, even if we missed the
         // explicit online signal (e.g. we joined after them).
@@ -136,6 +139,11 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
         ws.send(JSON.stringify({ type: 'emote', kind }))
       }
     },
+    sendChat(text) {
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'chat', text }))
+      }
+    },
     onMessage(handler) {
       messageHandler = handler
     },
@@ -147,6 +155,9 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
     },
     onEmote(handler) {
       emoteHandler = handler
+    },
+    onChat(handler) {
+      chatHandler = handler
     },
   }
 }

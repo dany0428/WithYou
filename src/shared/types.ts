@@ -85,7 +85,14 @@ export type ReactionKind = 'heart' | 'tilde' | 'bounce' | 'spin'
 export type EmoteKind = 'heart' | 'kiss' | 'hug' | 'laugh' | 'sad' | 'wave' | 'poke'
 
 /** Actions emitted from the native right-click context menu (main -> renderer). */
-export type CharacterAction = 'pet' | 'poke' | 'settings'
+export type CharacterAction = 'pet' | 'poke' | 'settings' | 'message'
+
+/**
+ * Longest mini-chat message we send. Bubbles are meant to be short one-liners
+ * over the character, not paragraphs; the renderer trims to this and the relay
+ * caps defensively too.
+ */
+export const MAX_CHAT_LENGTH = 200
 
 /** Channel names used for IPC. Centralised to avoid typos across processes. */
 export const IPC = {
@@ -113,6 +120,10 @@ export const IPC = {
   SendEmote: 'emote:send',
   /** Main -> renderer: play an emote (incoming from partner, or local feedback). */
   EmoteReceived: 'emote:received',
+  /** Renderer -> main: send a mini-chat message to the partner. */
+  SendChat: 'chat:send',
+  /** Main -> renderer: a chat message arrived from the partner. */
+  ChatReceived: 'chat:received',
   /** Renderer -> main: begin dragging the widget (follows the cursor). */
   WidgetStartDrag: 'widget:start-drag',
   /** Renderer -> main: stop dragging the widget (persists its new position). */
@@ -149,6 +160,10 @@ export interface CoupleWidgetApi {
   sendEmote(kind: EmoteKind): void
   /** Subscribe to emotes to play on the character. Returns an unsubscribe fn. */
   onEmote(handler: (kind: EmoteKind) => void): () => void
+  /** Send a mini-chat message to the partner (shown over our character on their screen). */
+  sendChat(text: string): void
+  /** Subscribe to chat messages arriving from the partner. Returns an unsubscribe fn. */
+  onChat(handler: (text: string) => void): () => void
   /** Begin dragging the widget; it follows the cursor until `endDrag`. */
   startDrag(): void
   /** Stop dragging the widget and persist its new position. */

@@ -63,6 +63,8 @@ const EMOTE_EMOJI: Record<EmoteKind, string> = {
 export interface CharacterHandle {
   /** Play an emote (sent to / received from the partner). */
   playEmote(kind: EmoteKind): void
+  /** Nudge the character when the partner says something (a chat arrived). */
+  say(): void
 }
 
 interface CharacterProps {
@@ -74,6 +76,8 @@ interface CharacterProps {
   connection: ConnectionState
   /** Whether the partner is actually present (online and reachable). */
   partnerOnline: boolean
+  /** The partner's latest chat message to show as a speech bubble (null hides it). */
+  message: string | null
 }
 
 interface FloatingText {
@@ -89,7 +93,7 @@ const DRAG_THRESHOLD = 4
 let floatId = 0
 
 const Character = forwardRef<CharacterHandle, CharacterProps>(function Character(
-  { name, state, activity, connection, partnerOnline },
+  { name, state, activity, connection, partnerOnline, message },
   ref,
 ) {
   const [floats, setFloats] = useState<FloatingText[]>([])
@@ -180,6 +184,7 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
       spawnSymbol(EMOTE_EMOJI[kind])
       playReaction('bounce')
     },
+    say: () => playReaction('bounce'),
   }))
 
   // --- Drag the whole widget by grabbing the character. The main process moves
@@ -253,6 +258,16 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
 
   return (
     <div className="flex flex-col items-center justify-end gap-1 select-none">
+
+      {/* Speech bubble: the partner's latest chat message, sitting above the
+          status label. Auto-dismiss is managed by the parent (it clears `message`).
+          A little tail points down at the character. */}
+      {message && (
+        <div className="pointer-events-none relative max-w-[200px] rounded-2xl bg-white px-3 py-1.5 text-xs font-medium text-gray-900 shadow-lg">
+          <span className="block whitespace-pre-wrap break-words">{message}</span>
+          <span className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-white" />
+        </div>
+      )}
 
       {/* Floating status label, hovering above the character: the partner's
           activity when they're online, otherwise Connecting/Offline. Hidden when

@@ -23,6 +23,7 @@ export function createLoopbackTransport(): Transport {
   let stateHandler: ((s: ConnectionState) => void) | null = null
   let partnerHandler: ((online: boolean) => void) | null = null
   let emoteHandler: ((kind: EmoteKind) => void) | null = null
+  let chatHandler: ((text: string) => void) | null = null
   let connected = false
   const timers = new Set<NodeJS.Timeout>()
 
@@ -64,6 +65,11 @@ export function createLoopbackTransport(): Transport {
       // receive pipe can be exercised on one machine.
       later(() => emoteHandler?.(kind), ECHO_DELAY_MS)
     },
+    sendChat(text) {
+      if (!connected) return
+      // Echo it back as the partner so the chat pipe can be tested on one machine.
+      later(() => chatHandler?.(text), ECHO_DELAY_MS)
+    },
     onMessage(handler) {
       messageHandler = handler
     },
@@ -75,6 +81,9 @@ export function createLoopbackTransport(): Transport {
     },
     onEmote(handler) {
       emoteHandler = handler
+    },
+    onChat(handler) {
+      chatHandler = handler
     },
   }
 }

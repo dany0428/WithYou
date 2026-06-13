@@ -305,6 +305,10 @@ app.whenReady().then(() => {
       // mirrored emote, if any, arrives separately over the transport).
       mainWindow?.webContents.send(IPC.EmoteReceived, kind)
     },
+    // A chat message goes only to the partner: the bubble represents the partner
+    // speaking, so we deliberately don't echo our own words onto our screen (they
+    // appear over our character on *their* screen instead).
+    sendChat: (text) => connection?.sendChat(text),
     hideWidget: () => mainWindow?.hide(),
     quitApp: () => app.quit(),
     isDragging: () => dragging,

@@ -64,6 +64,14 @@ const api: CoupleWidgetApi = {
     ipcRenderer.on(IPC.EmoteReceived, listener)
     return () => ipcRenderer.removeListener(IPC.EmoteReceived, listener)
   },
+  sendChat(text) {
+    ipcRenderer.send(IPC.SendChat, text)
+  },
+  onChat(handler) {
+    const listener = (_event: Electron.IpcRendererEvent, text: string) => handler(text)
+    ipcRenderer.on(IPC.ChatReceived, listener)
+    return () => ipcRenderer.removeListener(IPC.ChatReceived, listener)
+  },
   startDrag() {
     ipcRenderer.send(IPC.WidgetStartDrag)
   },

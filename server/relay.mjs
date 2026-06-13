@@ -16,8 +16,10 @@
 //   client -> relay  { type: 'join',     room, name }
 //   client -> relay  { type: 'presence', name, status }
 //   client -> relay  { type: 'emote',    kind }
+//   client -> relay  { type: 'chat',     text }
 //   relay  -> client { type: 'presence', name, status }   // the partner's
 //   relay  -> client { type: 'emote',    kind }           // the partner's
+//   relay  -> client { type: 'chat',     text }           // the partner's
 //   relay  -> client { type: 'partner-online' }           // partner joined
 //   relay  -> client { type: 'partner-offline' }          // partner left
 //   relay  -> client { type: 'error',    reason }         // e.g. room-full
@@ -104,6 +106,15 @@ wss.on('connection', (ws) => {
     if (msg.type === 'emote' && ws.room) {
       for (const peer of rooms.get(ws.room) ?? []) {
         if (peer !== ws) send(peer, { type: 'emote', kind: String(msg.kind) })
+      }
+      return
+    }
+
+    if (msg.type === 'chat' && ws.room) {
+      // Cap defensively so a misbehaving client can't push huge frames at the partner.
+      const text = String(msg.text).slice(0, 500)
+      for (const peer of rooms.get(ws.room) ?? []) {
+        if (peer !== ws) send(peer, { type: 'chat', text })
       }
     }
   })

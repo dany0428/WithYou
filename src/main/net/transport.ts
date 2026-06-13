@@ -18,6 +18,8 @@ export interface Transport {
   send(message: PresenceMessage): void
   /** Send a one-shot emote to the partner. No-op while disconnected. */
   sendEmote(kind: EmoteKind): void
+  /** Send a mini-chat message to the partner. No-op while disconnected. */
+  sendChat(text: string): void
   /** Register the handler for presence arriving from the partner. */
   onMessage(handler: (message: PresenceMessage) => void): void
   /** Register the handler for connection-state changes. */
@@ -29,4 +31,6 @@ export interface Transport {
   onPartnerPresence(handler: (online: boolean) => void): void
   /** Register the handler for an emote arriving from the partner. */
   onEmote(handler: (kind: EmoteKind) => void): void
+  /** Register the handler for a chat message arriving from the partner. */
+  onChat(handler: (text: string) => void): void
 }
