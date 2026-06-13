@@ -2,7 +2,7 @@ import { BrowserWindow, Menu, ipcMain } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 import { IPC, type ActivityStatus, type AppSettings, type CharacterAction, type EmoteKind } from '../shared/types'
 import type { ActivityMonitor } from './activity'
-import { loadSettings, saveSettings } from './settings'
+import { generatePairCode, loadSettings, saveSettings } from './settings'
 import type { UptimeTracker } from './uptime'
 
 /** Hooks the main process supplies so IPC can drive window/connection lifecycle. */
@@ -77,6 +77,9 @@ export function registerIpc(
     return saved
   })
   ipcMain.on(IPC.CloseSettings, () => hooks.closeSettings())
+
+  // Hand the settings UI a fresh random pairing code on request.
+  ipcMain.handle(IPC.GeneratePairCode, () => generatePairCode())
 
   // Initial uptime snapshot for a freshly-loaded window (live updates are pushed).
   ipcMain.handle(IPC.GetUptime, () => getUptime()?.current() ?? null)

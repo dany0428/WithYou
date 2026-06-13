@@ -72,6 +72,15 @@ export function installDemoMock(): void {
       demoSettings = settings
       return Promise.resolve(demoSettings)
     },
+    generatePairCode() {
+      // Preview-only: a same-shaped fake code (no crypto needed in the browser).
+      const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+      const code = Array.from(
+        { length: 12 },
+        () => alphabet[Math.floor(Math.random() * alphabet.length)],
+      ).join('')
+      return Promise.resolve(code.replace(/(.{4})(?=.)/g, '$1-'))
+    },
     closeSettings() {
       // No OS window to close in the browser — return to the widget view.
       window.location.hash = ''

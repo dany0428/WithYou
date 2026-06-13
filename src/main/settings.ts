@@ -1,7 +1,29 @@
 import { app } from 'electron'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { randomInt } from 'node:crypto'
 import path from 'node:path'
 import type { AppSettings } from '../shared/types'
+
+// Unambiguous alphabet for pairing codes — no 0/O/1/I/L, so a code read aloud or
+// retyped can't be confused. 32 symbols → ~5 bits each.
+const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+/** Characters in a generated code (excluding the grouping dashes). */
+const CODE_LENGTH = 12
+
+/**
+ * A fresh random pairing code, e.g. `K7QF-2M9X-PBRT` (~60 bits of entropy). It's
+ * the couple's shared secret AND the relay room name: random so nobody can guess
+ * it, and since the relay caps each room at two connections, only the two
+ * partners holding the code can ever be paired.
+ */
+export function generatePairCode(): string {
+  let code = ''
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)] // unbiased
+  }
+  // Group into blocks of four for readability: ABCD-EFGH-IJKL (no trailing dash).
+  return code.replace(/(.{4})(?=.)/g, '$1-')
+}
 
 // ---------------------------------------------------------------------------
 // Persisted user settings (name / pairing code / relay URL).

@@ -17,14 +17,34 @@ export default function Settings() {
   const [form, setForm] = useState<AppSettings>(EMPTY)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [uptime, setUptime] = useState<UptimeStats | null>(null)
 
   useEffect(() => {
-    window.couple.getSettings().then((s) => {
-      setForm(s)
+    window.couple.getSettings().then(async (s) => {
+      // First run has no code yet: hand the user a fresh random one to share
+      // (it's only persisted once they Save). They can regenerate if they like.
+      const pairCode = s.pairCode || (await window.couple.generatePairCode())
+      setForm({ ...s, pairCode })
       setLoaded(true)
     })
   }, [])
+
+  async function regenerateCode() {
+    const pairCode = await window.couple.generatePairCode()
+    setForm((f) => ({ ...f, pairCode }))
+    setCopied(false)
+  }
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(form.pairCode.trim())
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* clipboard may be unavailable; the user can still select + copy manually */
+    }
+  }
 
   // Live "online together" stats.
   useEffect(() => window.couple.onUptimeUpdate(setUptime), [])
@@ -86,13 +106,39 @@ export default function Settings() {
           onChange={set('name')}
           placeholder="e.g. Dany"
         />
-        <Field
-          label="Pairing code"
-          hint="A shared secret — both of you must enter the exact same code."
-          value={form.pairCode}
-          onChange={set('pairCode')}
-          placeholder="e.g. dany-and-love"
-        />
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-slate-200">Pairing code</span>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={form.pairCode}
+              onChange={set('pairCode')}
+              placeholder="e.g. K7QF-2M9X-PBRT"
+              spellCheck={false}
+              autoComplete="off"
+              className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm tracking-wide text-slate-100 outline-none placeholder:text-slate-500 focus:border-pink-500/60"
+            />
+            <button
+              type="button"
+              onClick={copyCode}
+              disabled={!form.pairCode.trim()}
+              className="shrink-0 rounded-md border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/5 disabled:opacity-40"
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+            <button
+              type="button"
+              onClick={regenerateCode}
+              className="shrink-0 rounded-md border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/5"
+            >
+              Generate
+            </button>
+          </div>
+          <span className="text-xs text-slate-500">
+            A randomly-generated shared secret. Send it to your partner and have
+            them paste the exact same code — only the two of you can connect.
+          </span>
+        </label>
         <Field
           label="Relay URL"
           hint="ws:// for local dev, wss:// for a hosted relay."

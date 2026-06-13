@@ -110,6 +110,8 @@ export const IPC = {
   GetSettings: 'settings:get',
   /** Renderer -> main (invoke): persist settings; reconnects with the new link. */
   SaveSettings: 'settings:save',
+  /** Renderer -> main (invoke): generate a fresh random pairing code. */
+  GeneratePairCode: 'settings:generate-pair-code',
   /** Renderer -> main: close the settings window. */
   CloseSettings: 'settings:close',
   /** Main -> renderer: updated "online together" stats. */
@@ -150,6 +152,8 @@ export interface CoupleWidgetApi {
   getSettings(): Promise<AppSettings>
   /** Persist settings; the main process reconnects with the new link. */
   saveSettings(settings: AppSettings): Promise<AppSettings>
+  /** Generate a fresh, high-entropy random pairing code (not yet saved). */
+  generatePairCode(): Promise<string>
   /** Close the settings window. */
   closeSettings(): void
   /** Subscribe to "online together" stat updates. Returns an unsubscribe fn. */

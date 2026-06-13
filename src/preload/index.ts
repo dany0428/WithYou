@@ -44,6 +44,9 @@ const api: CoupleWidgetApi = {
   saveSettings(settings) {
     return ipcRenderer.invoke(IPC.SaveSettings, settings) as Promise<AppSettings>
   },
+  generatePairCode() {
+    return ipcRenderer.invoke(IPC.GeneratePairCode) as Promise<string>
+  },
   closeSettings() {
     ipcRenderer.send(IPC.CloseSettings)
   },
