@@ -7,7 +7,7 @@ import {
   useState,
   type MouseEvent,
 } from 'react'
-import { useRive } from '@rive-app/react-canvas'
+import { useRive, Layout, Fit, Alignment } from '@rive-app/react-canvas'
 import type {
   ActivityStatus,
   AnimationState,
@@ -68,7 +68,6 @@ export interface CharacterHandle {
 }
 
 interface CharacterProps {
-  name: string
   state: AnimationState
   /** The partner's detected activity status. */
   activity: ActivityStatus
@@ -76,8 +75,6 @@ interface CharacterProps {
   connection: ConnectionState
   /** Whether the partner is actually present (online and reachable). */
   partnerOnline: boolean
-  /** The partner's latest chat message to show as a speech bubble (null hides it). */
-  message: string | null
 }
 
 interface FloatingText {
@@ -93,7 +90,7 @@ const DRAG_THRESHOLD = 4
 let floatId = 0
 
 const Character = forwardRef<CharacterHandle, CharacterProps>(function Character(
-  { name, state, activity, connection, partnerOnline, message },
+  { state, activity, connection, partnerOnline },
   ref,
 ) {
   const [floats, setFloats] = useState<FloatingText[]>([])
@@ -111,6 +108,9 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
     src: catIdleUrl,
     autoplay: false,
     autoBind: true,
+    // Sit the cat on the bottom of its canvas (instead of centered) so there's no
+    // empty gap below its feet — the sprite floated above the bottom otherwise.
+    layout: new Layout({ fit: Fit.Contain, alignment: Alignment.BottomCenter }),
   })
 
   const badge = STATE_BADGE[state]
@@ -259,16 +259,6 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   return (
     <div className="flex flex-col items-center justify-end gap-1 select-none">
 
-      {/* Speech bubble: the partner's latest chat message, sitting above the
-          status label. Auto-dismiss is managed by the parent (it clears `message`).
-          A little tail points down at the character. */}
-      {message && (
-        <div className="pointer-events-none relative max-w-[200px] rounded-2xl bg-white px-3 py-1.5 text-xs font-medium text-gray-900 shadow-lg">
-          <span className="block whitespace-pre-wrap break-words">{message}</span>
-          <span className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-white" />
-        </div>
-      )}
-
       {/* Floating status label, hovering above the character: the partner's
           activity when they're online, otherwise Connecting/Offline. Hidden when
           online + idle; reserves no space so the character stays anchored. */}
@@ -322,11 +312,6 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
             )}
           </div>
         </div>
-      </div>
-
-      {/* Name tag */}
-      <div className="-mt-2 rounded-full bg-black/55 px-3 py-0.5 text-xs font-semibold text-white shadow">
-        {name}
       </div>
     </div>
   )

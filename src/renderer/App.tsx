@@ -24,9 +24,7 @@ export default function App() {
   })
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const [uptime, setUptime] = useState<UptimeStats | null>(null)
-  // Whether the cursor is over the character (so we can reveal the chat button),
-  // the partner's latest message bubble, and the chat composer.
-  const [hovered, setHovered] = useState(false)
+  // The partner's latest message (shown as a speech bubble) and the chat composer.
   const [bubble, setBubble] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
   const [draft, setDraft] = useState('')
@@ -126,35 +124,52 @@ export default function App() {
       {/* Only this wrapper toggles interactivity, so transparent areas stay
           click-through. */}
       <div
-        className="flex flex-col items-center gap-1"
-        onMouseEnter={() => {
-          setInteractive(true)
-          setHovered(true)
-        }}
-        onMouseLeave={() => {
-          setInteractive(false)
-          setHovered(false)
-        }}
+        className="flex w-[220px] flex-col items-center gap-1"
+        onMouseEnter={() => setInteractive(true)}
+        onMouseLeave={() => setInteractive(false)}
       >
+        {/* Partner's latest chat as a speech bubble above the character
+            (auto-dismisses; the parent clears `bubble`). */}
+        {bubble && (
+          <div className="pointer-events-none relative max-w-[200px] rounded-2xl bg-white px-3 py-1.5 text-xs font-medium text-gray-900 shadow-lg">
+            <span className="block whitespace-pre-wrap break-words">{bubble}</span>
+            <span className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-white" />
+          </div>
+        )}
+
         <Character
           ref={characterRef}
-          name={partner.name}
           state={state}
           activity={partner.status}
           connection={connection}
           partnerOnline={uptime?.online ?? false}
-          message={bubble}
         />
-        {/* "Online together" badge — only while the partner is actually online. */}
-        {uptime?.online && (
-          <div className="pointer-events-none rounded-full bg-pink-600/80 px-2 py-0.5 text-[10px] font-semibold text-white shadow backdrop-blur-sm">
-            💞 {formatDuration(uptime.totalMs)}
-          </div>
-        )}
 
-        {/* Mini chat: a 💬 button reveals on hover; clicking opens the composer.
-            (The right-click "Send message…" item opens it too.) */}
-        {composerOpen ? (
+        {/* One compact line under the character: partner | time | 💬 message
+            button. Time shows only while online; the 💬 button (always present)
+            toggles the composer below. */}
+        <div className="flex w-full items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-0.5 text-[11px] text-white shadow backdrop-blur-sm">
+          <span className="shrink-0 font-semibold">{partner.name}</span>
+          {uptime?.online && (
+            <>
+              <span className="shrink-0 opacity-40">|</span>
+              <span className="shrink-0 whitespace-nowrap text-pink-200">
+                💞 {formatDuration(uptime.totalMs)}
+              </span>
+            </>
+          )}
+          <span className="shrink-0 opacity-40">|</span>
+          <button
+            onClick={() => setComposerOpen((v) => !v)}
+            title="Send a message"
+            className="shrink-0 leading-none hover:opacity-80"
+          >
+            💬
+          </button>
+        </div>
+
+        {/* Composer, opened by the 💬 button (or right-click "Send message…"). */}
+        {composerOpen && (
           <div className="flex items-center gap-1">
             <input
               ref={inputRef}
@@ -178,15 +193,6 @@ export default function App() {
               Send
             </button>
           </div>
-        ) : (
-          hovered && (
-            <button
-              onClick={() => setComposerOpen(true)}
-              className="rounded-full bg-black/55 px-2 py-0.5 text-xs text-white shadow hover:bg-black/70"
-            >
-              💬
-            </button>
-          )
         )}
       </div>
     </div>

@@ -20,8 +20,13 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox')
 }
 
-const WIDGET_WIDTH = 260
-const WIDGET_HEIGHT = 300
+// The window is transparent and click-through except over the character + its
+// controls, so it's sized with generous headroom: tall enough that hovering
+// (which reveals the status label above and the message composer below) never
+// pushes content past the top/bottom edges and clips it. The extra space is
+// invisible.
+const WIDGET_WIDTH = 300
+const WIDGET_HEIGHT = 400
 
 // A tiny pink-heart icon generated at build-time, embedded so we don't depend on
 // an external file path that may not be packaged. Used for the system tray.
