@@ -271,7 +271,7 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
       {/* Character + floating reactions */}
       <div
         ref={containerRef}
-        className="group relative h-[220px] w-[220px] cursor-grab active:cursor-grabbing"
+        className="group relative h-[170px] w-[220px] cursor-grab active:cursor-grabbing"
         onMouseDown={handleMouseDown}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
@@ -295,7 +295,7 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
           <div
             onAnimationEnd={() => setReaction('none')}
             className={[
-              'relative h-[220px] w-[220px] transition-transform duration-150',
+              'relative h-[170px] w-[220px] transition-transform duration-150',
               'group-hover:scale-105',
               isAway ? 'grayscale opacity-60' : '',
               reaction === 'bounce' ? 'animate-bounce1' : '',

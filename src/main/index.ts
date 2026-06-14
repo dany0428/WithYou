@@ -26,7 +26,7 @@ if (process.platform === 'linux') {
 // pushes content past the top/bottom edges and clips it. The extra space is
 // invisible.
 const WIDGET_WIDTH = 300
-const WIDGET_HEIGHT = 400
+const WIDGET_HEIGHT = 350
 
 // A tiny pink-heart icon generated at build-time, embedded so we don't depend on
 // an external file path that may not be packaged. Used for the system tray.
