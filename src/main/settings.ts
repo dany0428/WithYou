@@ -41,10 +41,21 @@ function defaults(): AppSettings {
     name: process.env.COUPLE_NAME ?? '',
     pairCode: process.env.COUPLE_PAIR_CODE ?? '',
     relayUrl: process.env.COUPLE_RELAY_URL ?? '',
+    anniversary: '',
   }
 }
 
-/** Keep only the known string fields, trimmed — never trust the file/IPC blob. */
+/** A `YYYY-MM-DD` string that names a real calendar date, else empty. */
+function sanitizeDate(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined
+  const s = v.trim()
+  if (s === '') return ''
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return ''
+  const d = new Date(`${s}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? '' : s
+}
+
+/** Keep only the known fields, trimmed/validated — never trust the file/IPC blob. */
 function sanitize(raw: unknown): Partial<AppSettings> {
   if (typeof raw !== 'object' || raw === null) return {}
   const obj = raw as Record<string, unknown>
@@ -53,9 +64,11 @@ function sanitize(raw: unknown): Partial<AppSettings> {
   const name = str(obj.name)
   const pairCode = str(obj.pairCode)
   const relayUrl = str(obj.relayUrl)
+  const anniversary = sanitizeDate(obj.anniversary)
   if (name !== undefined) out.name = name
   if (pairCode !== undefined) out.pairCode = pairCode
   if (relayUrl !== undefined) out.relayUrl = relayUrl
+  if (anniversary !== undefined) out.anniversary = anniversary
   return out
 }
 

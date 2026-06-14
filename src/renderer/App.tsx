@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Character, { type CharacterHandle } from './components/Character'
-import { formatDuration } from './util/duration'
+import { anniversaryMilestone, daysTogether, formatDuration } from './util/duration'
 import { MAX_CHAT_LENGTH } from '../shared/types'
 import type {
   AnimationState,
@@ -24,6 +24,13 @@ export default function App() {
   })
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const [uptime, setUptime] = useState<UptimeStats | null>(null)
+  // The couple's anniversary (YYYY-MM-DD), read from settings, drives the D-day
+  // counter. `tick` just forces a periodic re-render so it rolls over at midnight.
+  const [anniversary, setAnniversary] = useState('')
+  const [tick, setTick] = useState(0)
+  // A milestone banner ("100 days together! 🎉") shown on the day; auto-dismisses.
+  const [celebration, setCelebration] = useState<string | null>(null)
+  const celebrationTimer = useRef<number | null>(null)
   // The partner's latest message (shown as a speech bubble) and the chat composer.
   const [bubble, setBubble] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
@@ -109,6 +116,41 @@ export default function App() {
     window.couple.getUptime().then(setUptime)
   }, [])
 
+  // Anniversary (for the D-day counter): read once, then keep in sync with saves.
+  useEffect(() => {
+    window.couple.getSettings().then((s) => setAnniversary(s.anniversary))
+  }, [])
+  useEffect(
+    () => window.couple.onSettingsUpdated((s) => setAnniversary(s.anniversary)),
+    [],
+  )
+  // Re-render hourly so "D+247" advances to "D+248" at midnight without a restart.
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 60 * 60 * 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const days = daysTogether(anniversary)
+
+  // Celebrate a milestone day (a yearly anniversary, or every 100th day) with a
+  // festive burst + banner — but only once per day, so reloads don't replay it.
+  // Both partners detect the same date independently, so each screen celebrates.
+  useEffect(() => {
+    const label = anniversaryMilestone(anniversary)
+    if (!label) return
+    const key = `${anniversary}|${new Date().toDateString()}`
+    if (localStorage.getItem('withyou:celebrated') === key) return
+    localStorage.setItem('withyou:celebrated', key)
+    setCelebration(label)
+    characterRef.current?.celebrate()
+    if (celebrationTimer.current !== null) window.clearTimeout(celebrationTimer.current)
+    celebrationTimer.current = window.setTimeout(() => {
+      setCelebration(null)
+      celebrationTimer.current = null
+    }, 9000)
+    // `tick` (hourly) re-runs this so a midnight rollover into a milestone fires.
+  }, [anniversary, tick])
+
   // Browser-preview demo: let the control panel switch animation states. Harmless
   // under Electron, where nothing dispatches this event.
   useEffect(() => {
@@ -128,10 +170,18 @@ export default function App() {
         onMouseEnter={() => setInteractive(true)}
         onMouseLeave={() => setInteractive(false)}
       >
+        {/* Milestone banner (anniversary / 100-day) — sits above everything and
+            auto-dismisses; the character also throws a festive burst. */}
+        {celebration && (
+          <div className="pointer-events-none animate-float whitespace-nowrap rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-3 py-1 text-xs font-bold text-white shadow-lg">
+            {celebration}
+          </div>
+        )}
+
         {/* Partner's latest chat as a speech bubble above the character
             (auto-dismisses; the parent clears `bubble`). */}
         {bubble && (
-          <div className="pointer-events-none relative max-w-[200px] rounded-2xl bg-white px-3 py-1.5 text-xs font-medium text-gray-900 shadow-lg">
+          <div className="pointer-events-none relative mb-1.5 max-w-[200px] rounded-2xl bg-white px-3 py-1.5 text-xs font-medium text-gray-900 shadow-lg">
             <span className="block whitespace-pre-wrap break-words">{bubble}</span>
             <span className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-white" />
           </div>
@@ -149,12 +199,20 @@ export default function App() {
             button. Time shows only while online; the 💬 button (always present)
             toggles the composer below. */}
         <div className="flex w-full items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-0.5 text-[11px] text-white shadow backdrop-blur-sm">
-          <span className="shrink-0 font-semibold">{partner.name}</span>
+          <span className="min-w-0 truncate font-semibold">{partner.name}</span>
           {uptime?.online && (
             <>
               <span className="shrink-0 opacity-40">|</span>
               <span className="shrink-0 whitespace-nowrap text-pink-200">
                 💞 {formatDuration(uptime.totalMs)}
+              </span>
+            </>
+          )}
+          {days !== null && (
+            <>
+              <span className="shrink-0 opacity-40">|</span>
+              <span className="shrink-0 whitespace-nowrap text-rose-200" title="Days together">
+                💗 D+{days}
               </span>
             </>
           )}

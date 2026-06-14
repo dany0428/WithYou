@@ -47,6 +47,12 @@ const api: CoupleWidgetApi = {
   generatePairCode() {
     return ipcRenderer.invoke(IPC.GeneratePairCode) as Promise<string>
   },
+  onSettingsUpdated(handler) {
+    const listener = (_event: Electron.IpcRendererEvent, settings: AppSettings) =>
+      handler(settings)
+    ipcRenderer.on(IPC.SettingsUpdated, listener)
+    return () => ipcRenderer.removeListener(IPC.SettingsUpdated, listener)
+  },
   closeSettings() {
     ipcRenderer.send(IPC.CloseSettings)
   },

@@ -65,7 +65,12 @@ export interface CharacterHandle {
   playEmote(kind: EmoteKind): void
   /** Nudge the character when the partner says something (a chat arrived). */
   say(): void
+  /** Throw a festive burst for an anniversary / milestone day. */
+  celebrate(): void
 }
+
+/** Festive symbols thrown up when a milestone day is celebrated. */
+const CELEBRATION_BURST = ['🎉', '💕', '🎂', '✨', '🎉', '💗']
 
 interface CharacterProps {
   state: AnimationState
@@ -185,6 +190,13 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
       playReaction('bounce')
     },
     say: () => playReaction('bounce'),
+    celebrate: () => {
+      // Stagger the burst so the symbols rise in a little sequence, not a clump.
+      CELEBRATION_BURST.forEach((sym, i) =>
+        window.setTimeout(() => spawnSymbol(sym), i * 180),
+      )
+      playReaction('bounce')
+    },
   }))
 
   // --- Drag the whole widget by grabbing the character. The main process moves

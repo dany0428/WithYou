@@ -74,6 +74,10 @@ export function registerIpc(
     const linkChanged =
       before.relayUrl !== saved.relayUrl || before.pairCode !== saved.pairCode
     hooks.onSettingsChanged(linkChanged)
+    // Push the new values to every window (the widget reads the anniversary from here).
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.SettingsUpdated, saved)
+    }
     return saved
   })
   ipcMain.on(IPC.CloseSettings, () => hooks.closeSettings())

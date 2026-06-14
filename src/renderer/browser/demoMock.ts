@@ -27,7 +27,8 @@ export function installDemoMock(): void {
   let chatHandler: ((text: string) => void) | null = null
   let lastPos = { x: window.innerWidth - 90, y: window.innerHeight - 150 }
   // In-memory settings so the settings view can be previewed in a plain browser.
-  let demoSettings: AppSettings = { name: '', pairCode: '', relayUrl: '' }
+  let demoSettings: AppSettings = { name: '', pairCode: '', relayUrl: '', anniversary: '' }
+  let settingsHandler: ((settings: AppSettings) => void) | null = null
   // Simulated "online together" stats, seeded so the counter is visible.
   let uptime: UptimeStats = { online: false, sessionMs: 0, totalMs: 3 * 3_600_000 + 12 * 60_000 }
 
@@ -70,6 +71,7 @@ export function installDemoMock(): void {
     },
     saveSettings(settings) {
       demoSettings = settings
+      settingsHandler?.(demoSettings)
       return Promise.resolve(demoSettings)
     },
     generatePairCode() {
@@ -80,6 +82,12 @@ export function installDemoMock(): void {
         () => alphabet[Math.floor(Math.random() * alphabet.length)],
       ).join('')
       return Promise.resolve(code.replace(/(.{4})(?=.)/g, '$1-'))
+    },
+    onSettingsUpdated(handler) {
+      settingsHandler = handler
+      return () => {
+        if (settingsHandler === handler) settingsHandler = null
+      }
     },
     closeSettings() {
       // No OS window to close in the browser — return to the widget view.
@@ -271,7 +279,9 @@ export function installDemoMock(): void {
     <div style="font-weight:600;margin-bottom:4px">Send emote:</div>
     <div id="demo-emotes" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
     <div style="font-weight:600;margin-bottom:4px">Mini chat:</div>
-    <div id="demo-chat" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    <div id="demo-chat" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <div style="font-weight:600;margin-bottom:4px">Milestone:</div>
+    <div id="demo-milestone" style="display:flex;flex-wrap:wrap;gap:6px"></div>
   `
   document.body.appendChild(panel)
 
@@ -318,4 +328,24 @@ export function installDemoMock(): void {
   const chatEl = panel.querySelector('#demo-chat')!
   chatEl.appendChild(mkBtn('Open composer', () => fire('message')))
   chatEl.appendChild(mkBtn('Partner says hi', () => chatHandler?.('hi there 💕')))
+
+  // Set the anniversary to a date that makes today a milestone (and clear the
+  // once-a-day guard) so the celebration fires immediately for previewing.
+  const milestoneEl = panel.querySelector('#demo-milestone')!
+  const fireMilestone = (iso: string) => {
+    localStorage.removeItem('withyou:celebrated')
+    demoSettings = { ...demoSettings, anniversary: iso }
+    settingsHandler?.(demoSettings)
+  }
+  const toIso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate(),
+    ).padStart(2, '0')}`
+  // 99 days ago → today is the 100th day. One year ago (same calendar day) → 1yr.
+  const hundred = new Date()
+  hundred.setDate(hundred.getDate() - 99)
+  const lastYear = new Date()
+  lastYear.setFullYear(lastYear.getFullYear() - 1)
+  milestoneEl.appendChild(mkBtn('100 days 🎉', () => fireMilestone(toIso(hundred))))
+  milestoneEl.appendChild(mkBtn('1 year 🎉', () => fireMilestone(toIso(lastYear))))
 }

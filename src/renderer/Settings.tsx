@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { formatDurationLong } from './util/duration'
+import { daysTogether, formatDurationLong } from './util/duration'
 import type { AppSettings, UptimeStats } from '../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -11,7 +11,7 @@ import type { AppSettings, UptimeStats } from '../shared/types'
 // overlay — so it paints its own dark background and is fully interactive.
 // ---------------------------------------------------------------------------
 
-const EMPTY: AppSettings = { name: '', pairCode: '', relayUrl: '' }
+const EMPTY: AppSettings = { name: '', pairCode: '', relayUrl: '', anniversary: '' }
 
 export default function Settings() {
   const [form, setForm] = useState<AppSettings>(EMPTY)
@@ -59,6 +59,7 @@ export default function Settings() {
     name: form.name.trim(),
     pairCode: form.pairCode.trim(),
     relayUrl: form.relayUrl.trim(),
+    anniversary: form.anniversary.trim(),
   }
   const willConnect = Boolean(trimmed.relayUrl && trimmed.pairCode)
 
@@ -96,6 +97,11 @@ export default function Settings() {
             This session: {formatDurationLong(uptime.sessionMs)}
           </div>
         )}
+        {daysTogether(form.anniversary) !== null && (
+          <div className="mt-1 border-t border-white/10 pt-1.5 text-xs text-rose-300">
+            💗 Day {daysTogether(form.anniversary)} together (D+{daysTogether(form.anniversary)})
+          </div>
+        )}
       </div>
 
       <div className="mt-5 flex flex-1 flex-col gap-5">
@@ -105,6 +111,13 @@ export default function Settings() {
           value={form.name}
           onChange={set('name')}
           placeholder="e.g. Dany"
+        />
+        <Field
+          label="Anniversary"
+          hint="The day you started dating — drives the 💗 D-day counter. Set the same date on both PCs."
+          type="date"
+          value={form.anniversary}
+          onChange={set('anniversary')}
         />
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-slate-200">Pairing code</span>
@@ -183,22 +196,23 @@ interface FieldProps {
   label: string
   hint: string
   value: string
-  placeholder: string
+  placeholder?: string
+  type?: string
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
-function Field({ label, hint, value, placeholder, onChange }: FieldProps) {
+function Field({ label, hint, value, placeholder, type = 'text', onChange }: FieldProps) {
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-sm font-medium text-slate-200">{label}</span>
       <input
-        type="text"
+        type={type}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         spellCheck={false}
         autoComplete="off"
-        className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-pink-500/60"
+        className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-pink-500/60 [color-scheme:dark]"
       />
       <span className="text-xs text-slate-500">{hint}</span>
     </label>

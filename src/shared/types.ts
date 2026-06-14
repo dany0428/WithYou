@@ -57,6 +57,11 @@ export interface AppSettings {
   pairCode: string
   /** Relay URL (`ws://` or `wss://`). Empty means offline (loopback). */
   relayUrl: string
+  /**
+   * The day you started dating, as a local `YYYY-MM-DD` date (empty = unset).
+   * Drives the "days together" / D-day counter. Set the same date on both PCs.
+   */
+  anniversary: string
 }
 
 /**
@@ -112,6 +117,8 @@ export const IPC = {
   SaveSettings: 'settings:save',
   /** Renderer -> main (invoke): generate a fresh random pairing code. */
   GeneratePairCode: 'settings:generate-pair-code',
+  /** Main -> renderer: settings were saved (pushes the new values to all windows). */
+  SettingsUpdated: 'settings:updated',
   /** Renderer -> main: close the settings window. */
   CloseSettings: 'settings:close',
   /** Main -> renderer: updated "online together" stats. */
@@ -154,6 +161,8 @@ export interface CoupleWidgetApi {
   saveSettings(settings: AppSettings): Promise<AppSettings>
   /** Generate a fresh, high-entropy random pairing code (not yet saved). */
   generatePairCode(): Promise<string>
+  /** Subscribe to settings being saved (e.g. to refresh the anniversary). Returns an unsubscribe fn. */
+  onSettingsUpdated(handler: (settings: AppSettings) => void): () => void
   /** Close the settings window. */
   closeSettings(): void
   /** Subscribe to "online together" stat updates. Returns an unsubscribe fn. */
