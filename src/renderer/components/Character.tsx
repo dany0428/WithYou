@@ -8,6 +8,7 @@ import {
   type MouseEvent,
 } from 'react'
 import { useRive, Layout, Fit, Alignment } from '@rive-app/react-canvas'
+import { WIDGET_DRAG_HOLD_MS } from '../../shared/types'
 import type {
   ActivityStatus,
   AnimationState,
@@ -89,9 +90,6 @@ interface FloatingText {
 
 type Reaction = 'none' | 'bounce' | 'spin'
 
-/** Pixels the cursor must travel before a press counts as a drag (not a click). */
-const DRAG_THRESHOLD = 4
-
 let floatId = 0
 
 const Character = forwardRef<CharacterHandle, CharacterProps>(function Character(
@@ -102,9 +100,9 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
   const [reaction, setReaction] = useState<Reaction>('none')
   const clickTimer = useRef<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  // Drag bookkeeping: where the press started (screen px) and whether it grew
-  // into a real drag, so we can swallow the click-to-poke that follows a move.
-  const dragOrigin = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  // Drag bookkeeping: when the press started, so on release we can tell a held
+  // drag (≥ WIDGET_DRAG_HOLD_MS) from a quick click and swallow the click-to-poke.
+  const pressAt = useRef(0)
   const suppressClick = useRef(false)
 
   // Load the file; we start playback ourselves below once we know whether it has
@@ -199,44 +197,31 @@ const Character = forwardRef<CharacterHandle, CharacterProps>(function Character
     },
   }))
 
-  // --- Drag the whole widget by grabbing the character. The main process moves
-  // the window to follow the cursor; here we only decide press-vs-drag so a real
-  // drag doesn't also fire the click-to-poke. ---
-  const onDragMove = useCallback((e: globalThis.MouseEvent) => {
-    const d = dragOrigin.current
-    if (!d || d.moved) return
-    if (Math.hypot(e.screenX - d.x, e.screenY - d.y) > DRAG_THRESHOLD) d.moved = true
-  }, [])
-
+  // --- Drag the whole widget by grabbing the character. The main process locks
+  // the window on press and only starts following the cursor after a hold; here
+  // we just time the press so a held drag doesn't also fire the click-to-poke. ---
   const onDragEnd = useCallback(() => {
-    const d = dragOrigin.current
-    dragOrigin.current = null
-    window.removeEventListener('mousemove', onDragMove)
     window.removeEventListener('mouseup', onDragEnd)
     window.couple.endDrag()
-    // If it moved, swallow the click that the browser fires right after mouseup.
-    if (d?.moved) {
+    // A held press (the widget actually entered drag mode) swallows the click the
+    // browser fires after mouseup; a quick press stays a poke.
+    if (Date.now() - pressAt.current >= WIDGET_DRAG_HOLD_MS) {
       suppressClick.current = true
       window.setTimeout(() => (suppressClick.current = false), 0)
     }
-  }, [onDragMove])
+  }, [])
 
   function handleMouseDown(e: MouseEvent) {
     if (e.button !== 0) return // left button only; right-click opens the menu
-    dragOrigin.current = { x: e.screenX, y: e.screenY, moved: false }
+    pressAt.current = Date.now()
+    // Begin a hold: main locks the window now but only follows the cursor once
+    // the hold elapses, so an ordinary click can't drag the widget.
     window.couple.startDrag()
-    window.addEventListener('mousemove', onDragMove)
     window.addEventListener('mouseup', onDragEnd)
   }
 
-  // Clean up stray listeners if we unmount mid-press.
-  useEffect(
-    () => () => {
-      window.removeEventListener('mousemove', onDragMove)
-      window.removeEventListener('mouseup', onDragEnd)
-    },
-    [onDragMove, onDragEnd],
-  )
+  // Clean up a stray listener if we unmount mid-press.
+  useEffect(() => () => window.removeEventListener('mouseup', onDragEnd), [onDragEnd])
 
   // Clicking the partner's character pokes them; a double-click sends a heart.
   // Both travel to the partner over the transport and echo back as local

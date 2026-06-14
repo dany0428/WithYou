@@ -27,7 +27,13 @@ export function installDemoMock(): void {
   let chatHandler: ((text: string) => void) | null = null
   let lastPos = { x: window.innerWidth - 90, y: window.innerHeight - 150 }
   // In-memory settings so the settings view can be previewed in a plain browser.
-  let demoSettings: AppSettings = { name: '', pairCode: '', relayUrl: '', anniversary: '' }
+  let demoSettings: AppSettings = {
+    name: '',
+    pairCode: '',
+    relayUrl: '',
+    anniversary: '',
+    scale: 1,
+  }
   let settingsHandler: ((settings: AppSettings) => void) | null = null
   // Simulated "online together" stats, seeded so the counter is visible.
   let uptime: UptimeStats = { online: false, sessionMs: 0, totalMs: 3 * 3_600_000 + 12 * 60_000 }

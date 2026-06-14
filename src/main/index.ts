@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu, Tray, screen, nativeImage, ipcMain } from 'electron'
 import path from 'node:path'
-import { IPC } from '../shared/types'
+import { IPC, WIDGET_DRAG_HOLD_MS } from '../shared/types'
 import { loadWidgetPosition, saveWidgetPosition } from './windowState'
 import { registerIpc } from './ipc'
 import { startActivityMonitor, type ActivityMonitor } from './activity'
@@ -8,7 +8,7 @@ import { createConnection, type Connection } from './net/connection'
 import { createLoopbackTransport } from './net/loopbackTransport'
 import { createWebSocketTransport } from './net/wsTransport'
 import type { Transport } from './net/transport'
-import { loadSettings } from './settings'
+import { loadSettings, saveSettings } from './settings'
 import { createUptimeTracker, type UptimeTracker } from './uptime'
 
 // ---------------------------------------------------------------------------
@@ -25,8 +25,11 @@ if (process.platform === 'linux') {
 // (which reveals the status label above and the message composer below) never
 // pushes content past the top/bottom edges and clips it. The extra space is
 // invisible.
-const WIDGET_WIDTH = 300
-const WIDGET_HEIGHT = 350
+// Sized generously so the widget can scale up (right-click "Size", up to 1.4×)
+// without clipping. The extra area is transparent and click-through, so a bigger
+// window costs nothing visually; the character stays anchored bottom-right.
+const WIDGET_WIDTH = 360
+const WIDGET_HEIGHT = 520
 
 // A tiny pink-heart icon generated at build-time, embedded so we don't depend on
 // an external file path that may not be packaged. Used for the system tray.
@@ -50,6 +53,7 @@ let uptime: UptimeTracker | null = null
 let userPositioned = false
 let dragging = false
 let dragTimer: NodeJS.Timeout | null = null
+let dragHoldTimer: NodeJS.Timeout | null = null
 let dragGrab = { dx: 0, dy: 0 }
 let dragStart = { x: 0, y: 0 }
 
@@ -261,28 +265,43 @@ function openSettingsWindow(): void {
   }
 }
 
-/** Cursor-follow drag for the frameless widget: while dragging we keep the
- *  window interactive and reposition it every frame so the grab point stays
- *  under the cursor, then persist where it lands. */
+/** Cursor-follow drag for the frameless widget. A press locks the window
+ *  interactive (so we reliably get the mouseup) but the widget only starts
+ *  following the cursor after a deliberate hold — so a normal click/poke can't
+ *  knock it out of place. Once following, it repositions every frame so the grab
+ *  point stays under the cursor, then persists where it lands. */
 function registerDragIpc(): void {
   ipcMain.on(IPC.WidgetStartDrag, () => {
     if (!mainWindow) return
-    const cursor = screen.getCursorScreenPoint()
     const [wx, wy] = mainWindow.getPosition()
-    dragGrab = { dx: cursor.x - wx, dy: cursor.y - wy }
     dragStart = { x: wx, y: wy }
+    // Lock interactive for the whole press; the click-through guard keys off this.
     dragging = true
-    mainWindow.setIgnoreMouseEvents(false) // stay interactive for the whole drag
-    if (dragTimer) clearInterval(dragTimer)
-    dragTimer = setInterval(() => {
-      if (!mainWindow) return
-      const p = screen.getCursorScreenPoint()
-      mainWindow.setPosition(Math.round(p.x - dragGrab.dx), Math.round(p.y - dragGrab.dy))
-    }, 16)
+    mainWindow.setIgnoreMouseEvents(false)
+    // Engage the actual cursor-follow only after the hold elapses. We (re)grab at
+    // that moment so the window doesn't jump if the cursor drifted while holding.
+    if (dragHoldTimer) clearTimeout(dragHoldTimer)
+    dragHoldTimer = setTimeout(() => {
+      dragHoldTimer = null
+      if (!dragging || !mainWindow) return
+      const cursor = screen.getCursorScreenPoint()
+      const [cx, cy] = mainWindow.getPosition()
+      dragGrab = { dx: cursor.x - cx, dy: cursor.y - cy }
+      if (dragTimer) clearInterval(dragTimer)
+      dragTimer = setInterval(() => {
+        if (!mainWindow) return
+        const p = screen.getCursorScreenPoint()
+        mainWindow.setPosition(Math.round(p.x - dragGrab.dx), Math.round(p.y - dragGrab.dy))
+      }, 16)
+    }, WIDGET_DRAG_HOLD_MS)
   })
 
   ipcMain.on(IPC.WidgetEndDrag, () => {
     dragging = false
+    if (dragHoldTimer) {
+      clearTimeout(dragHoldTimer)
+      dragHoldTimer = null
+    }
     if (dragTimer) {
       clearInterval(dragTimer)
       dragTimer = null
@@ -327,6 +346,12 @@ app.whenReady().then(() => {
     // speaking, so we deliberately don't echo our own words onto our screen (they
     // appear over our character on *their* screen instead).
     sendChat: (text) => connection?.sendChat(text),
+    setScale: (scale) => {
+      const saved = saveSettings({ ...loadSettings(), scale })
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send(IPC.SettingsUpdated, saved)
+      }
+    },
     hideWidget: () => mainWindow?.hide(),
     quitApp: () => app.quit(),
     isDragging: () => dragging,

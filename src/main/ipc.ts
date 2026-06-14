@@ -21,6 +21,8 @@ export interface IpcHooks {
   sendEmote: (kind: EmoteKind) => void
   /** Send a mini-chat message to the partner. */
   sendChat: (text: string) => void
+  /** Persist a new widget size and push it to the windows. */
+  setScale: (scale: number) => void
   /** Hide the widget (it can be brought back from the tray). */
   hideWidget: () => void
   /** Quit the whole app. */
@@ -37,6 +39,14 @@ const EMOTE_ITEMS: ReadonlyArray<{ label: string; kind: EmoteKind }> = [
   { label: '😂 Laugh', kind: 'laugh' },
   { label: '🥺 Miss you', kind: 'sad' },
   { label: '👋 Wave', kind: 'wave' },
+]
+
+/** Widget sizes offered in the right-click "Size" submenu, in display order. */
+const SCALE_ITEMS: ReadonlyArray<{ label: string; scale: number }> = [
+  { label: 'Small', scale: 0.8 },
+  { label: 'Medium', scale: 1 },
+  { label: 'Large', scale: 1.2 },
+  { label: 'Extra large', scale: 1.4 },
 ]
 
 /** Selectable statuses for the manual-override submenu, in display order. */
@@ -140,6 +150,15 @@ export function registerIpc(
       click: () => hooks.sendEmote(it.kind),
     }))
 
+    // "Size" submenu: radio items for each widget scale, current one checked.
+    const currentScale = loadSettings().scale
+    const sizeSubmenu: MenuItemConstructorOptions[] = SCALE_ITEMS.map((it) => ({
+      label: it.label,
+      type: 'radio',
+      checked: Math.abs(currentScale - it.scale) < 0.001,
+      click: () => hooks.setScale(it.scale),
+    }))
+
     const menu = Menu.buildFromTemplate([
       { label: 'Pet 🤗', click: () => send('pet') },
       { label: 'Poke 👉', click: () => send('poke') },
@@ -148,6 +167,7 @@ export function registerIpc(
       { label: 'Send message…', click: () => send('message') },
       { type: 'separator' },
       { label: 'Status', submenu: statusSubmenu },
+      { label: 'Size', submenu: sizeSubmenu },
       { label: 'Settings…', click: () => hooks.openSettings() },
       { type: 'separator' },
       { label: 'Hide widget', click: () => hooks.hideWidget() },

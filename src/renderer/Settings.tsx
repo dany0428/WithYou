@@ -11,7 +11,7 @@ import type { AppSettings, UptimeStats } from '../shared/types'
 // overlay — so it paints its own dark background and is fully interactive.
 // ---------------------------------------------------------------------------
 
-const EMPTY: AppSettings = { name: '', pairCode: '', relayUrl: '', anniversary: '' }
+const EMPTY: AppSettings = { name: '', pairCode: '', relayUrl: '', anniversary: '', scale: 1 }
 
 export default function Settings() {
   const [form, setForm] = useState<AppSettings>(EMPTY)
@@ -60,6 +60,8 @@ export default function Settings() {
     pairCode: form.pairCode.trim(),
     relayUrl: form.relayUrl.trim(),
     anniversary: form.anniversary.trim(),
+    // Carried through untouched (set from the right-click "Size" menu, not here).
+    scale: form.scale,
   }
   const willConnect = Boolean(trimmed.relayUrl && trimmed.pairCode)
 

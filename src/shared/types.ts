@@ -62,6 +62,12 @@ export interface AppSettings {
    * Drives the "days together" / D-day counter. Set the same date on both PCs.
    */
   anniversary: string
+  /**
+   * Widget size multiplier (1 = default). A local display preference — not sent
+   * to the partner. Clamped to a sane range when loaded; chosen from the
+   * right-click "Size" menu.
+   */
+  scale: number
 }
 
 /**
@@ -98,6 +104,15 @@ export type CharacterAction = 'pet' | 'poke' | 'settings' | 'message'
  * caps defensively too.
  */
 export const MAX_CHAT_LENGTH = 200
+
+/**
+ * How long (ms) the user must hold a press on the character before the widget
+ * starts following the cursor. A deliberate long-press so an ordinary click /
+ * poke can't accidentally drag the widget out of place. Shared so the main
+ * process (which engages the drag) and the renderer (which decides whether the
+ * release was a drag or a click) agree.
+ */
+export const WIDGET_DRAG_HOLD_MS = 1000
 
 /** Channel names used for IPC. Centralised to avoid typos across processes. */
 export const IPC = {

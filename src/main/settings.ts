@@ -42,8 +42,13 @@ function defaults(): AppSettings {
     pairCode: process.env.COUPLE_PAIR_CODE ?? '',
     relayUrl: process.env.COUPLE_RELAY_URL ?? '',
     anniversary: '',
+    scale: 1,
   }
 }
+
+/** Smallest / largest the widget may be scaled to (matches the Size menu). */
+const MIN_SCALE = 0.8
+const MAX_SCALE = 1.4
 
 /** A `YYYY-MM-DD` string that names a real calendar date, else empty. */
 function sanitizeDate(v: unknown): string | undefined {
@@ -69,6 +74,9 @@ function sanitize(raw: unknown): Partial<AppSettings> {
   if (pairCode !== undefined) out.pairCode = pairCode
   if (relayUrl !== undefined) out.relayUrl = relayUrl
   if (anniversary !== undefined) out.anniversary = anniversary
+  if (typeof obj.scale === 'number' && Number.isFinite(obj.scale)) {
+    out.scale = Math.min(Math.max(obj.scale, MIN_SCALE), MAX_SCALE)
+  }
   return out
 }
 

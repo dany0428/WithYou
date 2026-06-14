@@ -27,6 +27,8 @@ export default function App() {
   // The couple's anniversary (YYYY-MM-DD), read from settings, drives the D-day
   // counter. `tick` just forces a periodic re-render so it rolls over at midnight.
   const [anniversary, setAnniversary] = useState('')
+  // Local widget size multiplier (right-click "Size"); scales the whole column.
+  const [scale, setScale] = useState(1)
   const [tick, setTick] = useState(0)
   // A milestone banner ("100 days together! 🎉") shown on the day; auto-dismisses.
   const [celebration, setCelebration] = useState<string | null>(null)
@@ -116,12 +118,20 @@ export default function App() {
     window.couple.getUptime().then(setUptime)
   }, [])
 
-  // Anniversary (for the D-day counter): read once, then keep in sync with saves.
+  // Settings the widget cares about (anniversary for the D-day counter, scale for
+  // sizing): read once, then keep in sync with every save.
   useEffect(() => {
-    window.couple.getSettings().then((s) => setAnniversary(s.anniversary))
+    window.couple.getSettings().then((s) => {
+      setAnniversary(s.anniversary)
+      setScale(s.scale)
+    })
   }, [])
   useEffect(
-    () => window.couple.onSettingsUpdated((s) => setAnniversary(s.anniversary)),
+    () =>
+      window.couple.onSettingsUpdated((s) => {
+        setAnniversary(s.anniversary)
+        setScale(s.scale)
+      }),
     [],
   )
   // Re-render hourly so "D+247" advances to "D+248" at midnight without a restart.
@@ -167,6 +177,7 @@ export default function App() {
           click-through. */}
       <div
         className="flex w-[220px] flex-col items-center gap-1"
+        style={{ transform: `scale(${scale})`, transformOrigin: 'bottom right' }}
         onMouseEnter={() => setInteractive(true)}
         onMouseLeave={() => setInteractive(false)}
       >
