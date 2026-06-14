@@ -192,7 +192,14 @@ function createTransport(): Transport {
   const { relayUrl, pairCode, name } = loadSettings()
   if (relayUrl && pairCode) {
     console.log(`[net] relay transport -> ${relayUrl} (room: ${pairCode})`)
-    return createWebSocketTransport({ url: relayUrl, room: pairCode, name: name || 'Me' })
+    return createWebSocketTransport({
+      url: relayUrl,
+      room: pairCode,
+      name: name || 'Me',
+      // Seed the relay's shared timer with our last-known total so it survives a
+      // relay restart (the relay keeps the larger of the two partners' seeds).
+      getSeedTotal: () => uptime?.seedTotal() ?? 0,
+    })
   }
   console.log('[net] no relay URL / pairing code set; using loopback transport')
   return createLoopbackTransport()
@@ -203,9 +210,15 @@ function createTransport(): Transport {
 function rebuildConnection(): void {
   connection?.stop()
   const transport = createTransport()
-  // The partner-presence signal drives the "online together" timer; registered
-  // here (not in the connection) so the connection stays a pure presence bridge.
-  transport.onPartnerPresence((online) => uptime?.setOnline(online))
+  // The "online together" timer is registered here (not in the connection) so the
+  // connection stays a pure presence bridge. A relay owns the *shared* timer and
+  // pushes authoritative stats (both partners see the same number); transports
+  // without that (loopback) fall back to a locally-driven timer.
+  if (transport.onUptime) {
+    transport.onUptime((stats) => uptime?.applyRemote(stats))
+  } else {
+    transport.onPartnerPresence((online) => uptime?.setOnline(online))
+  }
   connection = createConnection(() => mainWindow, transport, () => loadSettings().name)
   connection.start()
   // Push our current detected status into the fresh connection so the partner

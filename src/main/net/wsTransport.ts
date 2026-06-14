@@ -1,5 +1,5 @@
 import WebSocket from 'ws'
-import type { ConnectionState, EmoteKind, PresenceMessage } from '../../shared/types'
+import type { ConnectionState, EmoteKind, PresenceMessage, UptimeStats } from '../../shared/types'
 import type { Transport } from './transport'
 
 // ---------------------------------------------------------------------------
@@ -24,6 +24,12 @@ export interface WebSocketTransportOptions {
   room: string
   /** Our display name, sent to the relay on join. */
   name: string
+  /**
+   * Our last-known cumulative "online together" total (ms), sent to the relay on
+   * join so it can re-seed the room's shared timer after a relay restart. Read
+   * lazily so it reflects the latest persisted value.
+   */
+  getSeedTotal: () => number
 }
 
 const RECONNECT_BASE_MS = 1_000
@@ -37,6 +43,9 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
   let partnerHandler: ((online: boolean) => void) | null = null
   let emoteHandler: ((kind: EmoteKind) => void) | null = null
   let chatHandler: ((text: string) => void) | null = null
+  let uptimeHandler: ((stats: UptimeStats) => void) | null = null
+  /** Last cumulative total the relay told us, so we can report offline on drop. */
+  let lastTotalMs = 0
 
   let ws: WebSocket | null = null
   let stopped = false
@@ -68,7 +77,14 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
 
     socket.on('open', () => {
       attempts = 0
-      socket.send(JSON.stringify({ type: 'join', room: opts.room, name: opts.name }))
+      socket.send(
+        JSON.stringify({
+          type: 'join',
+          room: opts.room,
+          name: opts.name,
+          totalMs: opts.getSeedTotal(),
+        }),
+      )
       setState('connected')
       pingTimer = setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) socket.ping()
@@ -76,7 +92,16 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
     })
 
     socket.on('message', (data) => {
-      let msg: { type?: string; name?: string; status?: string; kind?: string; text?: string }
+      let msg: {
+        type?: string
+        name?: string
+        status?: string
+        kind?: string
+        text?: string
+        online?: boolean
+        sessionMs?: number
+        totalMs?: number
+      }
       try {
         msg = JSON.parse(data.toString())
       } catch {
@@ -90,6 +115,14 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
         emoteHandler?.(msg.kind as EmoteKind)
       } else if (msg.type === 'chat' && typeof msg.text === 'string') {
         chatHandler?.(msg.text)
+      } else if (msg.type === 'uptime' && typeof msg.totalMs === 'number') {
+        // The relay owns the shared "online together" timer; just relay its number.
+        lastTotalMs = msg.totalMs
+        uptimeHandler?.({
+          online: !!msg.online,
+          sessionMs: typeof msg.sessionMs === 'number' ? msg.sessionMs : 0,
+          totalMs: msg.totalMs,
+        })
       } else if (msg.type === 'presence' && typeof msg.status === 'string') {
         // Presence implies the partner is present, even if we missed the
         // explicit online signal (e.g. we joined after them).
@@ -109,6 +142,9 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
       pingTimer = null
       // Our link dropped, so we can no longer vouch for the partner being online.
       partnerHandler?.(false)
+      // The relay can't push us an "offline" while we're disconnected, so stop the
+      // shared timer locally (keeping the last cumulative total) until we're back.
+      uptimeHandler?.({ online: false, sessionMs: 0, totalMs: lastTotalMs })
       setState('disconnected')
       scheduleReconnect()
     })
@@ -127,6 +163,7 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
       ws?.close()
       ws = null
       partnerHandler?.(false)
+      uptimeHandler?.({ online: false, sessionMs: 0, totalMs: lastTotalMs })
       setState('disconnected')
     },
     send(message) {
@@ -158,6 +195,9 @@ export function createWebSocketTransport(opts: WebSocketTransportOptions): Trans
     },
     onChat(handler) {
       chatHandler = handler
+    },
+    onUptime(handler) {
+      uptimeHandler = handler
     },
   }
 }

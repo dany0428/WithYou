@@ -1,4 +1,4 @@
-import type { ConnectionState, EmoteKind, PresenceMessage } from '../../shared/types'
+import type { ConnectionState, EmoteKind, PresenceMessage, UptimeStats } from '../../shared/types'
 
 // ---------------------------------------------------------------------------
 // Transport abstraction (Stage 3).
@@ -33,4 +33,12 @@ export interface Transport {
   onEmote(handler: (kind: EmoteKind) => void): void
   /** Register the handler for a chat message arriving from the partner. */
   onChat(handler: (text: string) => void): void
+  /**
+   * Register the handler for authoritative "online together" stats pushed by the
+   * link itself. Optional: only transports that own the shared timer (the relay,
+   * which alone knows when *both* partners are in the room) implement this. When
+   * present it supersedes the local `onPartnerPresence`-driven timer, so both
+   * partners display the exact same number.
+   */
+  onUptime?(handler: (stats: UptimeStats) => void): void
 }
